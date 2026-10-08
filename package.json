@@ -1,6 +1,6 @@
 {
   "name": "chief-of-staff",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "description": "Chief of Staff for Managers: a local Mac app for a manager's meeting summaries, board, library and agents, built on a Rust core",
   "type": "module",

@@ -1,6 +1,6 @@
 [package]
 name = "chief-of-staff-app"
-version = "0.1.1"
+version = "0.2.0"
 edition.workspace = true
 publish.workspace = true
 description = "The Mac app: a window that shows the pages, answered by the core. No network port."
@@ -17,7 +17,7 @@ probe = []
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-chief-of-staff-core = { version = "0.1.1", path = "../core" }
+chief-of-staff-core = { version = "0.2.0", path = "../core" }
 serde_json = "1.0.151"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"

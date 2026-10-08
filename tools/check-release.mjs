@@ -21,8 +21,14 @@ const attach = sh('hdiutil', ['attach', '-nobrowse', '-readonly', '-mountpoint',
 if (attach.status !== 0) { console.error(`The .dmg could not be opened:\n${both(attach)}`); process.exit(1); }
 
 const results = [];
-// Details show paths from the repository, never a home folder.
-const check = (label, ok, detail = '') => results.push({ label, ok, detail: String(detail).replaceAll(`${REPO}/`, '') });
+// Details show paths from the repository, never a home folder. A check given as a function returns ok, or
+// [ok, detail]; if it throws, it fails with the error, and the checks after it still run and print.
+const check = (label, ok, detail = '') => {
+  if (typeof ok === 'function') {
+    try { [ok, detail = ''] = [ok()].flat(); } catch (e) { [ok, detail] = [false, e.message]; }
+  }
+  results.push({ label, ok: Boolean(ok), detail: String(detail).replaceAll(`${REPO}/`, '') });
+};
 try {
   const app = path.join(mount, `${CONF.productName}.app`);
   const exe = path.join(app, 'Contents', 'MacOS', 'chief-of-staff');
@@ -73,10 +79,12 @@ try {
 
   // 7. The sample inside: the three book-notes files are placeholders, and there is no board.json, ledger or notes file.
   const sample = path.join(app, 'Contents', 'Resources', 'sample-workspace');
-  const books = JSON.parse(fs.readFileSync(path.join(sample, 'library', 'books.json'), 'utf8'));
-  const notes = [...new Set(books.map((b) => b.notes).filter((n) => typeof n === 'string'))];
-  const placeholders = notes.filter((n) => fs.existsSync(path.join(sample, n)) && /^# My notes on .*\n\nPlaceholder\./.test(fs.readFileSync(path.join(sample, n), 'utf8')));
-  check('the sample has the three book-notes files as placeholders', notes.length === 3 && placeholders.length === 3, `${placeholders.length} of ${notes.length}`);
+  check('the sample has the three book-notes files as placeholders', () => {
+    const books = JSON.parse(fs.readFileSync(path.join(sample, 'library', 'books.json'), 'utf8'));
+    const notes = [...new Set(books.map((b) => b.notes).filter((n) => typeof n === 'string'))];
+    const placeholders = notes.filter((n) => fs.existsSync(path.join(sample, n)) && /^# My notes on .*\n\nPlaceholder\./.test(fs.readFileSync(path.join(sample, n), 'utf8')));
+    return [notes.length === 3 && placeholders.length === 3, `${placeholders.length} of ${notes.length}`];
+  });
   check('the sample has no board.json', !fs.existsSync(path.join(sample, 'board', 'board.json')));
   check('the sample has no actions/ledger.json', !fs.existsSync(path.join(sample, 'actions', 'ledger.json')));
   check('the sample has no notes/notes.json', !fs.existsSync(path.join(sample, 'notes', 'notes.json')));
@@ -89,6 +97,55 @@ try {
   const heads = [...coach.matchAll(/^## (.+)$/gm)].map((m) => m[1]);
   check('the sample\'s CLAUDE.md ends with the weekly brief, after "When Kevin asks for one of his agents"',
     heads.slice(-2).join('|') === 'When Kevin asks for one of his agents|When Kevin asks for the weekly brief', heads.slice(-2).join(' | '));
+  // 9. The sample's transcript to try (0.2.0).
+  const TRANSCRIPT = 'transcripts/Riley 1-1 - 20260929.txt';
+  check(`the sample has ${TRANSCRIPT}, as in the repository`,
+    () => fs.readFileSync(path.join(sample, TRANSCRIPT), 'utf8') === fs.readFileSync(path.join(REPO, 'sample-workspace', TRANSCRIPT), 'utf8'));
+
+  // 10. The starter workspace that File ▸ New Workspace… copies (0.2.0).
+  const starter = path.join(app, 'Contents', 'Resources', 'starter-workspace');
+  const starterAgentsDir = path.join(starter, '.claude', 'agents');
+  check('the starter has the coach (CLAUDE.md), five agents in .claude/agents/ and people.md', () => {
+    const found = fs.readdirSync(starterAgentsDir).filter((f) => f.endsWith('.md')).sort();
+    return [fs.existsSync(path.join(starter, 'CLAUDE.md')) && fs.existsSync(path.join(starter, 'people.md')) && found.join() === AGENTS.join(), found.join(', ')];
+  });
+  check('the starter has a README.txt in goals/, meeting-notes/ and transcripts/, and nothing else there', () => {
+    const wrong = ['goals', 'meeting-notes', 'transcripts'].filter((d) => fs.readdirSync(path.join(starter, d)).join() !== 'README.txt');
+    return [wrong.length === 0, wrong.join(', ')];
+  });
+  check('the starter has corrections/corrections.json with no entries and no note', () => {
+    const text = fs.readFileSync(path.join(starter, 'corrections', 'corrections.json'), 'utf8');
+    const log = JSON.parse(text);
+    return [Object.keys(log).join() === 'entries' && Array.isArray(log.entries) && log.entries.length === 0, text.trim()];
+  });
+  check('the starter has no .sample-workspace file', () => fs.existsSync(starter) && !fs.existsSync(path.join(starter, '.sample-workspace')));
+  // The sample's people, from its people.md (full names, first names and "Also called"), and its company, from its
+  // template (in full and its first word). A surname alone is not looked for: the library names Jim Collins.
+  check('the starter names no person or company from the sample, in any file or file name', () => {
+    const cells = fs.readFileSync(path.join(sample, 'people.md'), 'utf8').split('\n')
+      .filter((l) => l.startsWith('|') && !/^\|\s*(Name|-)/.test(l))
+      .flatMap((l) => { const c = l.split('|').map((x) => x.trim()); return [c[1], ...c[4].split(',')]; });
+    const company = fs.readFileSync(path.join(sample, 'templates', 'meeting-summary-template.md'), 'utf8').match(/^\*\*Company:\*\* (.+?) \|/m)[1];
+    const names = [...new Set([...cells, company].flatMap((n) => [n, n.trim().split(/\s+/)[0]]).map((n) => n.trim()).filter(Boolean))];
+    if (names.length < 10) return [false, `only ${names.length} names found in the sample: ${names.join(', ')}`];
+    const esc = (n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const hits = [];
+    const walkStarter = (d) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const abs = path.join(d, e.name);
+        const rel = path.relative(starter, abs);
+        const text = e.isDirectory() ? '' : fs.readFileSync(abs, 'utf8');
+        for (const n of names) if (new RegExp(`\\b${esc(n)}\\b`, 'i').test(`${rel}\n${text}`)) hits.push(`${rel}: ${n}`);
+        if (e.isDirectory()) walkStarter(abs);
+      }
+    };
+    walkStarter(starter);
+    return [hits.length === 0, hits.join('; ')];
+  });
+
+  // 11. The Help page's text (0.2.0).
+  check('the app has help.md, the same as the repository\'s',
+    () => fs.readFileSync(path.join(app, 'Contents', 'Resources', 'help.md'), 'utf8') === fs.readFileSync(path.join(REPO, 'help.md'), 'utf8'));
 } finally {
   sh('hdiutil', ['detach', mount]);
   fs.rmSync(mount, { recursive: true, force: true });

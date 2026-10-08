@@ -2115,6 +2115,14 @@ function wireRulesLearned(view) {
   draw();
 }
 
+// ---------- Help ----------
+
+// help.md, drawn by the core as a summary is. It reads nothing from the workspace and writes nothing.
+async function renderHelp() {
+  const help = await api('/api/help');
+  app.innerHTML = `<article class="prose help" id="help-article">${help.html}</article>`;
+}
+
 // ---------- router ----------
 
 const pages = {
@@ -2124,6 +2132,7 @@ const pages = {
   people: (arg) => (arg ? renderPerson(arg) : renderPeople()),
   agents: renderAgents,
   library: (arg) => (arg?.startsWith('notes/') ? renderNotes(arg.slice(6)) : renderLibrary()),
+  help: renderHelp,
 };
 
 // Old addresses that now open a section of another page: the Corrections page is "Rules learned" on Agents.
@@ -2141,7 +2150,7 @@ async function route() {
     const at = p.indexOf('=');
     return [p.slice(0, at < 0 ? p.length : at), at < 0 ? '' : decodeURIComponent(p.slice(at + 1).replace(/\+/g, ' '))];
   }));
-  document.querySelectorAll('.site-nav a').forEach((a) => {
+  document.querySelectorAll('.site-nav a, .sidebar-foot a[data-page]').forEach((a) => {
     if (a.dataset.page === name) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   });

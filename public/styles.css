@@ -125,6 +125,9 @@ code { font-family: var(--mono); font-size: 0.87em; }
 
 .sidebar-foot { margin-top: auto; padding: 12px 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .sidebar-foot .chip[hidden] { display: none; }
+.help-link { display: inline-flex; align-items: center; gap: 6px; margin-left: -6px; padding: 4px 6px; border-radius: var(--radius-control); color: var(--text); font-size: 13px; font-weight: 500; text-decoration: none; }
+.help-link:hover { background: #E1E4EA; color: var(--text); }
+.help-link[aria-current="page"] { color: var(--accent); font-weight: 600; }
 .local-mark { font-size: 12px; line-height: 1.45; color: var(--muted); }
 .local-mark::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--accent); vertical-align: 1px; }
 
@@ -848,7 +851,7 @@ html:has(body.welcome) { height: 100%; overflow: hidden; }
 body.welcome { height: 100%; display: grid; place-items: center; padding: 20px 24px; overflow: auto; }
 .welcome-card {
   width: 100%;
-  max-width: 30rem;
+  max-width: 38rem;
   margin: 0;
   padding: 24px 28px;
   display: grid;

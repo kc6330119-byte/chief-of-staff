@@ -1,0 +1,40 @@
+Kevin / Riley 1:1 · 29 September 2026, 2:03pm
+Fictional sample for a public YouTube video. Kevin Collins is the only real person. Harborline Cloud and everyone else are invented.
+
+[00:00] Kevin Collins: Hey Riley. So, first primary week done. How did it actually go?
+[00:05] Riley Brooks: Better than I expected, honestly. Six pages. Five were noise, mostly PingPost flapping, and I closed those myself. One was real.
+[00:15] Kevin Collins: Tell me about the real one.
+[00:17] Riley Brooks: Thursday night, about two in the morning. One of the Harborline Pay read replicas fell way behind and stopped catching up. It was already out of rotation, so no customers saw it. But the fix was a replica rebuild.
+[00:30] Kevin Collins: The runbook you picked.
+[00:32] Riley Brooks: Yep. I'd read it, but I'd never run it, so I called Praveen. That was the one time I called him all week. He talked me through it and I did the typing. Forty-one minutes start to finish.
+[00:44] Kevin Collins: What made you decide to call him rather than push through on your own?
+[00:48] Riley Brooks: Step six says "verify the snapshot" and doesn't say how. I didn't want to guess on a production database at two a.m.
+[00:56] Kevin Collins: That's exactly the right call. I told Dana last week: five pages handled solo, one escalation, done the way we'd want it.
+[01:04] Riley Brooks: You told Dana? Okay. That's nice to hear.
+[01:07] Kevin Collins: And thanks for picking up when I checked in on Wednesday. Next thing: the Keller and Moss lesson. Did the checklist change happen?
+[01:14] Riley Brooks: It did. "Customer confirmed" is on my close checklist now, the day after we talked. I used it twice during the week. One ticket I'd have closed early, and the customer came back with a follow-up question first.
+[01:26] Kevin Collins: That's the habit doing its job. Now, the rebuild. Last time we left it without a scope or a date. Let's fix that. After Thursday you probably know it better than anyone.
+[01:37] Riley Brooks: I've thought about it. Scope: one script that rebuilds a single read replica end to end, with a dry-run mode, plus the snapshot check written down properly. Not the primaries. Just replicas.
+[01:49] Kevin Collins: Good. When could you have a first version?
+[01:52] Riley Brooks: October thirtieth for a version Praveen can review. Then we try it on a staging replica.
+[01:58] Kevin Collins: And how will we know it worked?
+[02:01] Riley Brooks: A rebuild in under ten minutes, run by someone who has never done one, with no call to anyone. It was thirty-eight minutes in February and forty-one for me.
+[02:12] Kevin Collins: That's a measure I can put in front of Dana. Can you write the scope, the date and that measure into the ACT-121 ticket?
+[02:18] Riley Brooks: I'll have it in the ticket by Friday.
+[02:21] Kevin Collins: Great. And the alert review, you've been going?
+[02:24] Riley Brooks: Every one since Praveen started it. Two of my PingPost pages were rules we deleted last week. That felt good, honestly. Like the noise was going somewhere.
+[02:34] Kevin Collins: Did you bring anything of your own to it?
+[02:36] Riley Brooks: Not yet. I mostly listen.
+[02:39] Kevin Collins: Next time, bring the replica page. You're the one who lived it.
+[02:43] Riley Brooks: Okay. I can do that.
+[02:45] Kevin Collins: On my side, I'll log your primary week against your certification goal this week, with the dates and the page counts. That goal's done.
+[02:53] Riley Brooks: Thanks. Oh, and Sam's routing change, is that today?
+[02:56] Kevin Collins: The change board's this afternoon. Dana and I are both on it.
+[03:00] Riley Brooks: Good. I'll also write up what I learned on Thursday for the next person who's primary. Not sure when. It's mostly the snapshot step.
+[03:08] Kevin Collins: No rush on that one. Anything you need from me?
+[03:11] Riley Brooks: Maybe time with Praveen for the review of the script. He's busy.
+[03:15] Kevin Collins: Fair. Ask him, and if it's hard to find the time, tell me and I'll help clear it.
+[03:20] Riley Brooks: Will do.
+[03:22] Kevin Collins: You were nervous three weeks ago, and you handled a real page at two in the morning by doing the right thing. Remember that.
+[03:29] Riley Brooks: I will. Thanks, Kevin.
+[03:31] Kevin Collins: See you in two weeks.

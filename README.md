@@ -10,11 +10,11 @@ A Rust core reads and writes the files and answers every request. The interface 
 JavaScript inside a native macOS window (the system's own WebKit, through Tauri). There is no server, no
 browser and no network port.
 
-Version 0.1.1, built from Mission Control Native 0.1.1.
+Version 0.2.0, built from Mission Control Native 0.1.1.
 
 ## Download
 
-Download `Chief-of-Staff-for-Managers-0.1.1-universal.dmg` from [the latest release][latest]. It runs on
+Download `Chief-of-Staff-for-Managers-0.2.0-universal.dmg` from [the latest release][latest]. It runs on
 macOS 13 or later, on Apple silicon and Intel Macs.
 
 1. Open the `.dmg`. A window shows the app and a shortcut to Applications.
@@ -32,21 +32,35 @@ for malicious software and found none. The stapled ticket lets it open on a Mac 
 On first launch the app asks for your workspace folder. You can:
 
 - **Choose Folder…** to open your own workspace.
+- **New Workspace…** to start your own workspace in a folder you name: see "Start your own workspace"
+  below.
 - **Open Sample…** to save a copy of the sample workspace to a folder you name, and open it. The sample is
   fictional: an invented company and team, and one real name, the manager's. Its three book-notes files are
   placeholders. While it is open, the sidebar shows "Recreated demo data". The sample never replaces a file
   or folder that already exists.
 - **Quit.**
 
-The app remembers the folder. To switch, use File ▸ Choose Workspace… (⌘O) or File ▸ Open Sample
-Workspace…. The window title shows which folder is open.
+The app remembers the folder. To switch, use File ▸ Choose Workspace… (⌘O), File ▸ New Workspace… or
+File ▸ Open Sample Workspace…, and the window title shows which folder is open.
 
 If a folder has no `meeting-notes`, `CLAUDE.md`, `library` or `corrections`, the app warns that it may not be
 a workspace before it opens it.
 
+## Start your own workspace
+
+1. Choose File ▸ New Workspace…, or click **New Workspace…** on the welcome window, and name the folder. The
+   app makes it and opens it. It holds the coach, the five agents, the summary template, the placeholder book
+   notes, an empty corrections log and a `people.md` with one row for you, and nothing from the sample.
+2. In Terminal, go to the new folder, start `claude` and type `Set up my workspace`. The coach asks for your
+   name, role, company and the people you meet with, then writes `people.md` and puts your name and company
+   in the coach, the agents and the template.
+
+Then start a new Claude Code session in the folder.
+
 ## The pages
 
-The sidebar holds six pages. The app opens on Today.
+The sidebar holds six pages. The app opens on Today. Below them, **Help** opens the Help page: getting
+started, everyday use, an FAQ and troubleshooting. `help.md` in this repository is the same text.
 
 - **Today**: "I owe", "Owed to me" and "Needs your confirmation", then People. A row shows the item's ID, its
   due date and the meeting it came from, with a chip for anything past due or due within a week, and an
@@ -135,7 +149,8 @@ Board.
 
 ### Before you start
 
-- Create a `transcripts/` folder in the workspace and put your transcript in it. The sample has none.
+- The sample has one transcript to try, `transcripts/Riley 1-1 - 20260929.txt`. A new workspace has an empty
+  `transcripts/` folder: put your transcripts in it.
 - The coach reads the meeting date from inside the transcript, in whatever form it is written, and saves the
   summary as YYYY-MM-DD_<transcript name>.md. The app reads the meeting's date from the start of that name. If
   the date is unclear, the coach asks.
@@ -150,11 +165,8 @@ Board.
 - The sidebar shows "Recreated demo data" while the workspace holds a file named `.sample-workspace`. Delete
   that file, then reload with View ▸ Reload (⌘R), to remove the badge. It is hidden: in Finder, press
   Command-Shift-period to show it.
-- For real work, a new folder is cleaner than converting the sample. From a copy of the sample, copy
-  `CLAUDE.md`, `people.md` and the `.claude/`, `templates/`, `library/` and `corrections/` folders into the
-  new folder. `.claude/` is hidden too. The copied files still name Kevin, the sample's team and Harborline
-  Cloud: change them as described below. To start the corrections log empty, replace everything in
-  `corrections/corrections.json` with `{ "entries": [] }`.
+- For real work, a new workspace is cleaner than converting the sample: see "Start your own workspace"
+  above.
 
 ### Changing the coach and the agents
 
@@ -371,7 +383,7 @@ building it.
 
 - In a folder with no `library/books.json` or `corrections/corrections.json`, the Library page or "Rules
   learned" shows a notice naming the missing file. Adding a book or a correction there is refused, and the
-  app does not create those files. A copy of the sample provides them.
+  app does not create those files. A copy of the sample and a new workspace both provide them.
 - A page does not update by itself when a file changes on disk. Click another page and back, or use View ▸
   Reload (⌘R).
 - The Meetings page lists only files in `meeting-notes/` whose names end in `.md`.

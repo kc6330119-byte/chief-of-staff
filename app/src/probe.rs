@@ -4,11 +4,13 @@
 // MC_PROBE_PICK       the folder "chosen" when the welcome window's Choose Folder… is clicked
 // MC_PROBE            a script run in the window after every page load; it drives the pages like a person
 //                     would and reports by requesting /__probe/<what>, which the core answers 404 and
-//                     this file prints. /__probe/done ends the app.
+//                     this file prints. /__probe/done ends the app. /__probe/menu prints the File menu's items, and
+//                     /__probe/show-file-menu opens the File menu over the window for a screenshot.
 use std::path::PathBuf;
 
+use tauri::menu::{MenuItemKind, Submenu};
 use tauri::webview::{PageLoadEvent, PageLoadPayload};
-use tauri::{AppHandle, Manager, WebviewWindow};
+use tauri::{AppHandle, Manager, WebviewWindow, Wry};
 
 pub fn workspace() -> Option<PathBuf> {
     std::env::var_os("MC_PROBE_WORKSPACE").map(PathBuf::from)
@@ -43,6 +45,19 @@ pub fn log_request(app: &AppHandle, method: &str, target: &str, headers: &[(Stri
             let _ = window.set_size(tauri::LogicalSize::new(w, h));
         }
     }
+    // The File menu as the app built it: "file-menu" and its items' names as JSON, separators as "".
+    if target.starts_with("/__probe/menu") {
+        let items: Vec<String> = file_menu(app).and_then(|f| f.items().ok()).unwrap_or_default().iter().map(label).collect();
+        log(&format!("file-menu {}", serde_json::to_string(&items).unwrap()));
+    }
+    // The File menu, opened as a menu over the window's top left corner. It stays open, holding the app's main
+    // thread, until the app is ended; check-app.mjs takes its screenshot after "file-menu-shown", then ends it.
+    if target.starts_with("/__probe/show-file-menu") {
+        if let (Some(file), Some(window)) = (file_menu(app), app.get_webview_window(crate::WINDOW)) {
+            log("file-menu-shown");
+            if let Err(e) = window.popup_menu_at(&file, tauri::LogicalPosition::new(24.0, 24.0)) { log(&format!("the File menu could not be shown: {e}")); }
+        }
+    }
     if target.starts_with("/__probe/done") {
         let app = app.clone();
         std::thread::spawn(move || {
@@ -50,4 +65,21 @@ pub fn log_request(app: &AppHandle, method: &str, target: &str, headers: &[(Stri
             app.exit(0);
         });
     }
+}
+
+fn file_menu(app: &AppHandle) -> Option<Submenu<Wry>> {
+    app.menu()?.items().ok()?.into_iter().find_map(|item| match item {
+        MenuItemKind::Submenu(s) if s.text().is_ok_and(|t| t == "File") => Some(s),
+        _ => None,
+    })
+}
+
+fn label(item: &MenuItemKind<Wry>) -> String {
+    match item {
+        MenuItemKind::MenuItem(i) => i.text(),
+        MenuItemKind::Submenu(i) => i.text(),
+        MenuItemKind::Predefined(i) => i.text(),
+        MenuItemKind::Check(i) => i.text(),
+        MenuItemKind::Icon(i) => i.text(),
+    }.unwrap_or_default()
 }

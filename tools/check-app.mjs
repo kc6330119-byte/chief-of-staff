@@ -20,6 +20,9 @@
 //     content security policy blocks anything from elsewhere, and no page shows "Invalid Date"
 //   - a summary named with spaces, an apostrophe, an ampersand and an accented letter opens from the Meetings
 //     page and from its Board card, and a name that is not a summary shows a plain notice
+//   - the Help link in the sidebar foot opens the Help page with its five sections, nothing marked "could not read" and
+//     no link out of the app; the File menu has New Workspace… just above Open Sample Workspace… (the Save panel itself is
+//     not driven); screenshots of the Help page, the welcome window and the File menu
 //   - notes between meetings: a note added on a person's page and one on a meeting's page (with the meeting and its one
 //     other attendee filled in) land in notes/notes.json; with the switch off they show as "private note", the switch
 //     shows the text and hides it again; the Board card and the Today row of the note's item carry the "1 note" marker
@@ -151,6 +154,20 @@ async function run(profile, label, env, { timeout = 180000, untilWindow = false 
     if (id) sh('screencapture', ['-x', '-o', '-l', id, path.join(SHOTS, `${label}-${name}.png`)]);
   };
   const onLine = (line) => {
+    // The File menu's items, as the app built them.
+    const menu = line.match(/^\[probe\] file-menu (\[.*\])$/);
+    if (menu) events.push({ run: label, what: 'file-menu', data: JSON.parse(menu[1]) });
+    // The File menu is open over the window: the open menu's own window, and the screen around the app's windows,
+    // then the app is ended.
+    if (line === '[probe] file-menu-shown') {
+      setTimeout(() => {
+        const menuId = sh(windowId, [String(child.pid), '--menu']).stdout.trim();
+        if (menuId) sh('screencapture', ['-x', '-o', '-l', menuId, path.join(SHOTS, 'file-menu.png')]);
+        const bounds = sh(windowId, [String(child.pid), '--bounds']).stdout.trim();
+        if (bounds) sh('screencapture', ['-x', '-R', bounds, path.join(SHOTS, 'file-menu-in-window.png')]);
+        child.kill('SIGTERM');
+      }, 1500);
+    }
     // What the core received for each meeting, exactly as the window sent it.
     const asked = line.match(/^\[probe\] GET (\/api\/meeting\?\S*) -> (\d+)/);
     if (asked) meetingRequests.push({ run: label, target: asked[1], status: Number(asked[2]) });
@@ -230,6 +247,9 @@ const filesCreated = ['library/books.json', 'corrections/corrections.json'].filt
 const ledgerAfterOpeningBoard = fs.existsSync(path.join(wsMissing, 'actions', 'ledger.json'));
 const unreadableKept = ['library/books.json', 'corrections/corrections.json'].every((f) => fs.readFileSync(path.join(wsUnreadable, f), 'utf8') === '{ this is not JSON');
 
+// The File menu, opened over the Help page, for its screenshot.
+await run('debug', 'file-menu', { MC_PROBE_WORKSPACE: WS, MC_PROBE: probeScript('file-menu') }, { timeout: 60000 });
+
 // The normal build's welcome window, for the screenshot.
 fs.rmSync(SETTINGS);
 await run('release', 'release-welcome', {}, { untilWindow: true });
@@ -271,13 +291,17 @@ const verdict = (ok) => (ok ? 'pass' : 'FAIL');
 const HOMES = `${path.dirname(os.homedir())}/`;
 const homePaths = fs.readFileSync(exePath('release')).toString('latin1').split(HOMES).length - 1;
 const lsofClean = Object.values(lsofs).every((l) => l.sockets === 'none' && l.listening === 'none');
+const HELP_SECTIONS = ['Getting started', 'Make it your own', 'Everyday use', 'FAQ', 'Troubleshooting'];
+const help = one('help');
+const fileMenu = one('file-menu');
+const shotsTaken = fs.readdirSync(SHOTS);
 
 const checklist = {
   'no listening port for the app\'s process (lsof)': verdict(lsofClean && Object.keys(lsofs).length >= 3),
   'works with Wi-Fi off': 'needs Kevin (the app opened no socket at all; see lsof)',
-  'welcome window: the app name, the two sentences and the three buttons': verdict(
+  'welcome window: the app name, the two sentences and the four buttons': verdict(
     one('welcome', 'welcome')?.name === NAME && one('welcome', 'welcome')?.text.length === 2
-    && one('welcome', 'welcome')?.buttons.join('|') === 'Choose Folder…|Open Sample…|Quit'),
+    && one('welcome', 'welcome')?.buttons.join('|') === 'Choose Folder…|New Workspace…|Open Sample…|Quit'),
   'welcome window: the main button is "Open Sample…" on first launch and "Choose Folder…" when the folder is missing': verdict(
     one('welcome', 'welcome')?.primary.join() === 'Open Sample…' && one('welcome', 'welcome')?.focused === 'Open Sample…'
     && one('welcome', 'missing')?.primary.join() === 'Choose Folder…' && one('welcome', 'missing')?.focused === 'Choose Folder…'),
@@ -296,6 +320,13 @@ const checklist = {
   'a books.json or corrections.json that can\'t be read is still an error, and is not overwritten': verdict(
     ['library', 'corrections'].every((p) => /could not read/.test(one('unreadable-files', 'unreadable-files')?.[p]?.error || '')) && unreadableKept),
   'every page loads': verdict(pages.length > 0 && pages.every((p) => !p.error)),
+  'the Help link in the sidebar foot opens the Help page: its five sections, nothing marked "could not read", no link out': verdict(
+    help?.link === 'Help' && help.hash === '#/help' && help.page === 'help' && help.current === 'page'
+    && help.sections.join() === HELP_SECTIONS.join() && help.marks === 0 && !help.error && help.linksOut.length === 0 && !help.wide),
+  'the File menu has New Workspace… just above Open Sample Workspace…': verdict(
+    fileMenu?.includes('New Workspace…') && fileMenu.indexOf('Open Sample Workspace…') === fileMenu.indexOf('New Workspace…') + 1),
+  'screenshots of the Help page, the welcome window and the File menu': verdict(
+    ['session-help.png', 'welcome-welcome.png', 'release-welcome-window.png', 'file-menu.png'].every((f) => shotsTaken.includes(f))),
   'the app opens on Today, the first page in the sidebar': verdict(one('ready')?.page === 'today' && one('ready')?.firstNav === 'today'),
   'the sidebar is Today, Meetings, Board, People, Agents, Library': verdict(
     one('ready')?.nav?.join() === 'Today,Meetings,Board,People,Agents,Library'),
@@ -417,6 +448,8 @@ const report = {
     errors: events.filter((e) => e.what === 'error'),
     pages: pages.map((p) => `${p.name}: ${p.error ? `ERROR ${p.error}` : 'ok'}${p.invalidDate ? ' INVALID DATE' : ''} (could not read ×${p.couldNotRead}, demo badge ${p.demoBadge ? 'on' : 'off'}, title "${p.title}")`),
     welcome: { firstLaunch: one('welcome', 'welcome'), afterChoose: one('main-after-welcome', 'welcome'), missing: one('welcome', 'missing'), missingResult },
+    help,
+    fileMenu,
     boardOpen: one('board-open'),
     ageCells: one('age-cells'),
     idCells: ev('id-cells'),

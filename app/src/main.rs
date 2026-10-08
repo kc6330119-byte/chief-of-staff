@@ -35,6 +35,7 @@ fn main() {
         .menu(menu)
         .on_menu_event(|app, event| match event.id().as_ref() {
             "choose-workspace" => workspace::choose_from_menu(app.clone()),
+            "new-workspace" => workspace::new_from_menu(app.clone()),
             "open-sample" => workspace::open_sample_from_menu(app.clone()),
             "reload" => {
                 if let Some(window) = app.get_webview_window(WINDOW) { let _ = window.reload(); }
@@ -76,6 +77,7 @@ fn menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .build()?;
     let file = SubmenuBuilder::new(app, "File")
         .item(&MenuItemBuilder::with_id("choose-workspace", "Choose Workspace…").accelerator("CmdOrCtrl+O").build(app)?)
+        .item(&MenuItemBuilder::with_id("new-workspace", "New Workspace…").build(app)?)
         .item(&MenuItemBuilder::with_id("open-sample", "Open Sample Workspace…").build(app)?)
         .separator().close_window()
         .build()?;

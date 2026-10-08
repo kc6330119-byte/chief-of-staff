@@ -1,6 +1,7 @@
 // Run inside the app window by tools/check-app.mjs (app built with --features probe). It uses the pages the
 // way a person would: clicks, form fields, the switch, a reload. It reports by requesting /__probe/<what>,
-// which the app prints. MODE is replaced by the check script: "session", "restart", "welcome" or "missing".
+// which the app prints. MODE is replaced by the check script: "session", "restart", "welcome", "missing",
+// "missing-files", "unreadable-files" or "file-menu".
 // ODD_NAME is replaced with the file name of a summary that has spaces, an apostrophe, an ampersand and an
 // accented letter (decision 76). NOTE_TEXT and MEETING_NOTE are the texts of the two notes between meetings it adds
 // (step 8), each with a word found nowhere else.
@@ -246,6 +247,12 @@
       await report('done');
       return;
     }
+    // The File menu, opened over the Help page for its screenshot. The app holds it open until it is ended.
+    if (MODE === 'file-menu') {
+      await go('#/help');
+      await report('show-file-menu');
+      return;
+    }
     if (MODE === 'welcome') {
       await report('main-after-welcome', { url: location.href, appCalls: await appCalls() });
       await report('done');
@@ -333,6 +340,28 @@
         await report('page', pageState(`notes ${f}`));
         if (i === 0) await shot('library-notes');
       }
+
+      // ---- Help: the link in the sidebar foot opens the Help page, drawn whole; and the File menu's items ----
+      const helpLink = document.querySelector('.sidebar-foot a.help-link');
+      helpLink?.click();
+      await sleep(80);
+      await waitFor(() => !app.querySelector('.loading'), 'the Help page to load');
+      await sleep(150);
+      window.scrollTo(0, 0);
+      await report('page', pageState('help'));
+      await report('help', {
+        link: helpLink?.textContent.trim() || null,
+        hash: location.hash,
+        page: document.body.dataset.page,
+        current: helpLink?.getAttribute('aria-current') || null,
+        sections: [...app.querySelectorAll('#help-article h2')].map((h) => h.textContent.trim()),
+        marks: app.querySelectorAll('.cnr, .notice').length,
+        error: app.querySelector('.notice-error')?.textContent.trim() || null,
+        linksOut: [...app.querySelectorAll('#help-article a')].map((a) => a.getAttribute('href')).filter((h) => !h.startsWith('#')),
+        wide: document.documentElement.scrollWidth > window.innerWidth + 1,
+      });
+      await shot('help');
+      await report('menu');
 
       // ---- a summary whose name has spaces, an apostrophe, an ampersand and an accented letter: opened by
       // clicking its link on the Meetings page, as a person would ----

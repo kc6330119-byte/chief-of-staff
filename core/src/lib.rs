@@ -176,6 +176,8 @@ pub struct Core {
     lock: Mutex<()>,
     seen_warnings: Mutex<HashSet<String>>,
     log: Box<dyn Fn(&str) + Send + Sync>,
+    /// The Help page's Markdown (help.md), handed over by the caller; None if it couldn't be read.
+    help: Option<String>,
 }
 
 static CARD_ROUTE: LazyLock<regex::Regex> = LazyLock::new(|| js::re(r"^\/api\/board\/cards\/([\w-]+)$", ""));
@@ -193,7 +195,7 @@ enum Route {
     Board, AddCard, EditCard(String), MoveCard(String), AcceptCard(String), DeleteCard(String),
     Library, Notes, AddBook, EditBook(String),
     Corrections, AddCorrection, Agents, People, Person(String), PersonAct(String, String, String),
-    AddNote, EditNote(String), DeleteNote(String),
+    AddNote, EditNote(String), DeleteNote(String), Help,
 }
 
 /// The route for a method and path: Ok(route), Err(true) if the path exists for another method, Err(false) if none.
@@ -232,6 +234,7 @@ fn match_route(method: &str, path: &str) -> Result<Route, bool> {
         ("POST", (path == "/api/notes").then_some(Route::AddNote)),
         ("PUT", note.clone().map(Route::EditNote)),
         ("DELETE", note.map(Route::DeleteNote)),
+        ("GET", (path == "/api/help").then_some(Route::Help)),
     ];
     let mut path_matched = false;
     for (m, route) in candidates {
@@ -244,7 +247,14 @@ fn match_route(method: &str, path: &str) -> Result<Route, bool> {
 
 impl Core {
     pub fn new(ws: Workspace, policy: Policy, log: impl Fn(&str) + Send + Sync + 'static) -> Self {
-        Core { ws, policy, lock: Mutex::new(()), seen_warnings: Mutex::new(HashSet::new()), log: Box::new(log) }
+        Core { ws, policy, lock: Mutex::new(()), seen_warnings: Mutex::new(HashSet::new()), log: Box::new(log), help: None }
+    }
+
+    /// The Help page's text. help.md is not part of the workspace: the app ships it as a resource and the test server
+    /// reads the repository's copy, so each caller reads it and hands it over here.
+    pub fn with_help(mut self, markdown: Option<String>) -> Self {
+        self.help = markdown;
+        self
     }
 
     pub fn workspace(&self) -> &Workspace {
@@ -385,6 +395,11 @@ impl Core {
             Route::AddNote => notes::add(ws, self.demo(), body, private)?,
             Route::EditNote(id) => notes::edit(ws, self.demo(), &id, body, private)?,
             Route::DeleteNote(id) => notes::delete(ws, &id)?,
+            // Drawn like a meeting summary. help.md has no "Manager-only note" item, so nothing is held back.
+            Route::Help => match &self.help {
+                Some(text) => json!({ "html": markdown::render_markdown(text, false).html }),
+                None => return Err(Error::Status(404, "The Help page is missing from the app.".into())),
+            },
         })
     }
 
@@ -470,4 +485,18 @@ fn percent_decode(s: &str) -> Option<String> {
         }
     }
     String::from_utf8(out).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn help_md_renders_whole() {
+        // A list item that starts "Manager-only note" would be held back like a private note in a summary.
+        let rendered = markdown::render_markdown(include_str!("../../help.md"), false);
+        assert_eq!(rendered.private_notes, 0);
+        // No links out: the app has no browser for them.
+        assert!(!rendered.html.contains("href=\"http"), "{}", rendered.html);
+    }
 }

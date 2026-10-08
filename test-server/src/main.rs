@@ -17,7 +17,9 @@ fn main() {
     let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(3000);
     if !root.exists() { eprintln!("Data root not found: {}", root.display()); }
 
-    let core = Core::new(Workspace::new(&root), Policy::loopback(port), |line| eprintln!("{line}"));
+    // The Help page's text, the repository's own help.md, which the app ships as a resource.
+    let help = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../help.md")).ok();
+    let core = Core::new(Workspace::new(&root), Policy::loopback(port), |line| eprintln!("{line}")).with_help(help);
     let server = tiny_http::Server::http(("127.0.0.1", port)).unwrap_or_else(|e| {
         eprintln!("Could not listen on 127.0.0.1:{port}: {e}");
         std::process::exit(1);

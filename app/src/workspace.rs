@@ -36,9 +36,9 @@ pub fn start(app: AppHandle) {
     });
 }
 
-/// The welcome window shows public/welcome.html, served by the core like the other pages. Its three
-/// buttons are plain links to /welcome/choose, /welcome/sample and /welcome/quit; this window catches
-/// those addresses before they load, so the page needs no app permissions and runs no app code.
+/// The welcome window shows public/welcome.html, served by the core like the other pages. Its four
+/// buttons are plain links to /welcome/choose, /welcome/new, /welcome/sample and /welcome/quit; this window
+/// catches those addresses before they load, so the page needs no app permissions and runs no app code.
 fn show_welcome(app: &AppHandle, missing: Option<&Path>) {
     let mut url: Url = format!("{ORIGIN}/welcome.html").parse().unwrap();
     // The folder as the main window's title shows it, with the home folder as "~".
@@ -46,7 +46,7 @@ fn show_welcome(app: &AppHandle, missing: Option<&Path>) {
     let actions = app.clone();
     let builder = WebviewWindowBuilder::new(app, WELCOME, WebviewUrl::CustomProtocol(url))
         .title(app.package_info().name.clone())
-        .inner_size(580.0, 440.0)
+        .inner_size(660.0, 440.0)
         .resizable(false)
         .center()
         .incognito(true)
@@ -65,30 +65,42 @@ fn welcome_link(app: &AppHandle, url: &Url) -> bool {
     if url.scheme() != SCHEME || url.host_str() != Some("localhost") { return false; }
     match url.path() {
         "/welcome.html" => true,
-        "/welcome/choose" => { choose_then_open(app, pick_folder); false }
-        "/welcome/sample" => { choose_then_open(app, copy_sample); false }
+        "/welcome/choose" => { choose_then_open(app, pick_folder, None); false }
+        "/welcome/new" => { choose_then_open(app, create_workspace, Some(NEW_WORKSPACE_READY)); false }
+        "/welcome/sample" => { choose_then_open(app, copy_sample, None); false }
         "/welcome/quit" => { app.exit(0); false }
         _ => false,
     }
 }
 
-/// Runs a folder choice off the main thread and opens what was chosen. Cancelling leaves things as they were.
-fn choose_then_open(app: &AppHandle, choose: fn(&AppHandle) -> Option<PathBuf>) {
+/// Runs a folder choice off the main thread and opens what was chosen, then shows `then` if there is one.
+/// Cancelling leaves things as they were.
+fn choose_then_open(app: &AppHandle, choose: fn(&AppHandle) -> Option<PathBuf>, then: Option<&'static str>) {
     if CHOOSING.swap(true, Ordering::SeqCst) { return; }
     let app = app.clone();
     std::thread::spawn(move || {
-        if let Some(folder) = choose(&app) { open(&app, folder); }
+        if let Some(folder) = choose(&app) {
+            open(&app, folder);
+            if let Some(message) = then { tell(&app, MessageDialogKind::Info, message); }
+        }
         CHOOSING.store(false, Ordering::SeqCst);
     });
 }
 
 pub fn choose_from_menu(app: AppHandle) {
-    choose_then_open(&app, pick_folder);
+    choose_then_open(&app, pick_folder, None);
+}
+
+pub fn new_from_menu(app: AppHandle) {
+    choose_then_open(&app, create_workspace, Some(NEW_WORKSPACE_READY));
 }
 
 pub fn open_sample_from_menu(app: AppHandle) {
-    choose_then_open(&app, copy_sample);
+    choose_then_open(&app, copy_sample, None);
 }
+
+/// Shown once a new workspace is open: the coach's first-run section in its CLAUDE.md does the rest.
+const NEW_WORKSPACE_READY: &str = "Your new workspace is ready. In Terminal, open Claude Code in this folder and type: Set up my workspace";
 
 /// The window a dialog belongs to, so it opens as a sheet on that window.
 fn front(app: &AppHandle) -> Option<WebviewWindow> {
@@ -134,40 +146,85 @@ fn not_a_workspace_warning(folder: &Path) -> (String, MessageDialogButtons) {
     (message, MessageDialogButtons::OkCancelCustom("Cancel".into(), USE_FOLDER.into()))
 }
 
-/// The sample workspace that ships inside the app. In a development build, also the copy in the
-/// repository; that path is not compiled into a release build.
-fn sample_source(app: &AppHandle) -> Option<PathBuf> {
-    if let Ok(p) = app.path().resolve("sample-workspace", BaseDirectory::Resource) {
-        if p.is_dir() { return Some(p); }
+/// A file or folder that ships inside the app: the sample workspace, the starter workspace and help.md. In a
+/// development build, also the copy in the repository; that path is not compiled into a release build.
+fn bundled(app: &AppHandle, name: &str) -> Option<PathBuf> {
+    if let Ok(p) = app.path().resolve(name, BaseDirectory::Resource) {
+        if p.exists() { return Some(p); }
     }
     #[cfg(debug_assertions)]
     {
-        let dev = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sample-workspace");
-        if dev.is_dir() { return Some(dev); }
+        let dev = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(name);
+        if dev.exists() { return Some(dev); }
     }
     None
 }
 
-/// Copies the sample workspace to a new folder the person names. An existing file or folder is never
-/// replaced, even if the save panel asked "Replace?" and the answer was yes.
+/// A workspace that ships inside the app and is copied to a new folder: what the save panel and the messages say.
+struct Bundled {
+    source: &'static str,
+    title: &'static str,
+    /// The folder name offered, after the app's name.
+    name: &'static str,
+    missing: &'static str,
+    /// Why nothing was copied over an existing file or folder.
+    never_replaces: &'static str,
+    failed: &'static str,
+}
+
+const SAMPLE: Bundled = Bundled {
+    source: "sample-workspace",
+    title: "Save a copy of the sample workspace",
+    name: "Sample",
+    missing: "The sample workspace is missing from the app.",
+    never_replaces: "The sample never replaces a file or folder.",
+    failed: "The sample could not be copied to",
+};
+
+/// The starter workspace: the coach, the agents, the template, the book notes and a people.md with one row for
+/// the manager, ready for "Set up my workspace".
+const STARTER: Bundled = Bundled {
+    source: "starter-workspace",
+    title: "Create a new workspace",
+    name: "Workspace",
+    missing: "The starter workspace is missing from the app.",
+    never_replaces: "A new workspace never replaces a file or folder.",
+    failed: "The new workspace could not be created in",
+};
+
 fn copy_sample(app: &AppHandle) -> Option<PathBuf> {
-    let Some(source) = sample_source(app) else {
-        tell(app, MessageDialogKind::Error, "The sample workspace is missing from the app.");
+    copy_bundled(app, &SAMPLE)
+}
+
+fn create_workspace(app: &AppHandle) -> Option<PathBuf> {
+    copy_bundled(app, &STARTER)
+}
+
+/// Copies a workspace that ships inside the app to a new folder the person names. An existing file or folder is
+/// never replaced, even if the save panel asked "Replace?" and the answer was yes.
+fn copy_bundled(app: &AppHandle, copy: &Bundled) -> Option<PathBuf> {
+    let Some(source) = bundled(app, copy.source).filter(|p| p.is_dir()) else {
+        tell(app, MessageDialogKind::Error, copy.missing);
         return None;
     };
-    let mut panel = app.dialog().file().set_title("Save a copy of the sample workspace")
-        .set_file_name(format!("{} Sample", app.package_info().name)).set_can_create_directories(true);
+    let mut panel = app.dialog().file().set_title(copy.title)
+        .set_file_name(format!("{} {}", app.package_info().name, copy.name)).set_can_create_directories(true);
     if let Some(w) = front(app) { panel = panel.set_parent(&w); }
     let target = panel.blocking_save_file()?.into_path().ok()?;
     if target.exists() {
-        tell(app, MessageDialogKind::Warning, &format!("Nothing was copied, because this already exists:\n\n{}\n\nThe sample never replaces a file or folder. Choose a new name.", target.display()));
+        tell(app, MessageDialogKind::Warning, &format!("Nothing was copied, because this already exists:\n\n{}\n\n{} Choose a new name.", target.display(), copy.never_replaces));
         return None;
     }
     if let Err(e) = copy_new_folder(&source, &target) {
-        tell(app, MessageDialogKind::Error, &format!("The sample could not be copied to {}: {e}", target.display()));
+        tell(app, MessageDialogKind::Error, &format!("{} {}: {e}", copy.failed, target.display()));
         return None;
     }
     Some(target)
+}
+
+/// The Help page's text. The app runs without it; #/help then says it is missing.
+fn help_text(app: &AppHandle) -> Option<String> {
+    fs::read_to_string(bundled(app, "help.md")?).ok()
 }
 
 /// Copies a folder to a path that must not exist yet; on failure, removes only what it created.
@@ -202,7 +259,7 @@ fn shown(folder: &Path) -> String {
 
 /// Opens a workspace: a new core for it, remembered in the settings file, shown in the window title.
 pub fn open(app: &AppHandle, folder: PathBuf) {
-    let core = Core::new(Workspace::new(&folder), Policy::app_scheme(ORIGIN), |line| eprintln!("{line}"));
+    let core = Core::new(Workspace::new(&folder), Policy::app_scheme(ORIGIN), |line| eprintln!("{line}")).with_help(help_text(app));
     *app.state::<State>().core.write().unwrap() = Some(Arc::new(core));
     if let Err(e) = settings::save(app, &folder) {
         tell(app, MessageDialogKind::Warning, &format!("The workspace is open, but it could not be remembered for next time: {e}"));
@@ -289,6 +346,58 @@ mod tests {
         fs::write(&file, "keep").unwrap();
         assert!(copy_new_folder(&source, &file).is_err());
         assert_eq!(fs::read_to_string(&file).unwrap(), "keep");
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    fn starter() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(STARTER.source)
+    }
+
+    #[test]
+    fn a_new_workspace_never_replaces_anything() {
+        let dir = scratch("new");
+        let target = dir.join("My Workspace");
+        copy_new_folder(&starter(), &target).unwrap();
+        assert_eq!(fs::read_to_string(target.join("people.md")).unwrap(), fs::read_to_string(starter().join("people.md")).unwrap());
+        assert!(target.join(".claude/agents").is_dir());
+
+        // An existing folder is left exactly as it was, and nothing is added to it.
+        fs::write(target.join("people.md"), "mine").unwrap();
+        fs::remove_file(target.join("CLAUDE.md")).unwrap();
+        assert!(copy_new_folder(&starter(), &target).is_err());
+        assert_eq!(fs::read_to_string(target.join("people.md")).unwrap(), "mine");
+        assert!(!target.join("CLAUDE.md").exists());
+        // So is an existing file.
+        let file = dir.join("a-file");
+        fs::write(&file, "keep").unwrap();
+        assert!(copy_new_folder(&starter(), &file).is_err());
+        assert_eq!(fs::read_to_string(&file).unwrap(), "keep");
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_new_workspace_is_not_the_sample() {
+        let dir = scratch("not-sample");
+        let target = dir.join("My Workspace");
+        copy_new_folder(&starter(), &target).unwrap();
+        // Without the marker, the "Recreated demo data" badge stays off and ages count to today.
+        assert!(!target.join(chief_of_staff_core::SAMPLE_MARKER).exists());
+        let core = Core::new(Workspace::new(&target), Policy::app_scheme(ORIGIN), |_| {});
+        assert!(!core.demo());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_new_workspace_keeps_the_read_me_in_each_empty_folder() {
+        let dir = scratch("readme");
+        let target = dir.join("My Workspace");
+        copy_new_folder(&starter(), &target).unwrap();
+        for folder in ["goals", "meeting-notes", "transcripts"] {
+            let names: Vec<String> = fs::read_dir(target.join(folder)).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+            assert_eq!(names, ["README.txt"], "{folder}");
+            let rel = format!("{folder}/README.txt");
+            assert_eq!(fs::read_to_string(target.join(&rel)).unwrap(), fs::read_to_string(starter().join(&rel)).unwrap(), "{rel}");
+        }
         fs::remove_dir_all(&dir).unwrap();
     }
 
