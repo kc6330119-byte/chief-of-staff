@@ -10,11 +10,11 @@ A Rust core reads and writes the files and answers every request. The interface 
 JavaScript inside a native macOS window (the system's own WebKit, through Tauri). There is no server, no
 browser and no network port.
 
-Version 0.1.0, built from Mission Control Native 0.1.1.
+Version 0.1.1, built from Mission Control Native 0.1.1.
 
 ## Download
 
-Download `Chief-of-Staff-for-Managers-0.1.0-universal.dmg` from [the latest release][latest]. It runs on
+Download `Chief-of-Staff-for-Managers-0.1.1-universal.dmg` from [the latest release][latest]. It runs on
 macOS 13 or later, on Apple silicon and Intel Macs.
 
 1. Open the `.dmg`. A window shows the app and a shortcut to Applications.
@@ -136,9 +136,9 @@ Board.
 ### Before you start
 
 - Create a `transcripts/` folder in the workspace and put your transcript in it. The sample has none.
-- Start the transcript's file name with the meeting date, for example `2026-10-05_kevin-sam_1on1.txt`. The
-  coach saves the summary under the same name, ending in .md, and the app reads the meeting's date from the
-  start of that name.
+- The coach reads the meeting date from inside the transcript, in whatever form it is written, and saves the
+  summary as YYYY-MM-DD_<transcript name>.md. The app reads the meeting's date from the start of that name. If
+  the date is unclear, the coach asks.
 - `people.md` lists everyone in your meetings: Name, Role, Relationship (me, report, manager, peer or
   other) and Also called. Mark yourself "me". The coach asks about any name it can't find there. Today and
   People need it to tell what you owe from what is owed to you.
