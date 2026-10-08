@@ -1,0 +1,141 @@
+{
+  "note": "Seeded from the production of the first four videos. Review each entry and delete or fix any that don't match your memory.",
+  "entries": [
+    {
+      "date": "2026-09",
+      "where": "RAG vs LLM Wiki video, head-to-head scene",
+      "what": "My script said RAG missed two of the questions. The recordings showed it answered both correctly.",
+      "caught_by": "Claude Code's check of the recordings before building the scene",
+      "decision": "Rewrote the narration to match the recordings instead of re-recording to fit the script.",
+      "rule": "Check every result line against the recordings before generating the avatar clip."
+    },
+    {
+      "date": "2026-09-29",
+      "where": "Outage video, demo snapshot",
+      "what": "The first test snapshot, drafted by my AI assistant, included lock-wait timeout errors that the fictional reports say can't happen, and a date in the future.",
+      "caught_by": "Claude's own answer in the off-camera run",
+      "decision": "Fixed the snapshot and ran it again before recording.",
+      "rule": "Do an off-camera run first, and fix the test data, never the prompt."
+    },
+    {
+      "date": "2026-09-29",
+      "where": "Outage video, Scene 5",
+      "what": "The narration named the months of two incidents, but the recording only showed report IDs.",
+      "caught_by": "Claude Code's honesty check",
+      "decision": "Added on-screen callouts labeled 'from the wiki'.",
+      "rule": "If the narration claims it, the screen must show it."
+    },
+    {
+      "date": "2026-09-29",
+      "where": "Outage video, demo result",
+      "what": "The demo rated the incident P1. I would have rated it P2.",
+      "caught_by": "Me",
+      "decision": "Kept the disagreement in the video.",
+      "rule": "A human confirms every P1."
+    },
+    {
+      "date": "2026-09-30",
+      "where": "Mission Control video, first demo run",
+      "what": "The first demo ran in a folder whose instructions were written for video production, not for the demo.",
+      "caught_by": "My AI assistant, reviewing the recording",
+      "decision": "Built a clean workspace with only the instructions shown on screen.",
+      "rule": "Demos run in a workspace that holds nothing the viewer can't see."
+    },
+    {
+      "date": "2026-09-30",
+      "where": "Mission Control video, Scene 1",
+      "what": "Note cards showed invented meeting names and dates in a scene about my real meetings.",
+      "caught_by": "My AI assistant, reviewing the render",
+      "decision": "Replaced them with generic labels and no dates.",
+      "rule": "Don't invent details about real things."
+    },
+    {
+      "date": "2026-09-30",
+      "where": "Mission Control video, Scene 8",
+      "what": "The script put a paraphrase of a transcript line inside quote marks.",
+      "caught_by": "Claude Code's honesty check",
+      "decision": "Used the transcript's exact words.",
+      "rule": "Quote transcripts word for word."
+    },
+    {
+      "date": "2026-09-30",
+      "where": "Mission Control video, thumbnail",
+      "what": "The first thumbnail read like an operations ticket and didn't speak to managers.",
+      "caught_by": "Me, asking whether it would reach our audience",
+      "decision": "Rewrote the text around the manager's problem.",
+      "rule": "The thumbnail names the audience's problem, not the system's wording."
+    },
+    {
+      "date": "2026-09-30",
+      "where": "Mission Control video, company logo",
+      "what": "The logo I made for the fictional company used a name that a real software organization already uses.",
+      "caught_by": "My AI assistant, with a web search",
+      "decision": "Left the logo out.",
+      "rule": "Search a fictional name before putting it on screen."
+    },
+    {
+      "date": "2026-10-02",
+      "where": "Mission Control site, build spec",
+      "what": "My spec's test assumed the alert-hygiene sprint ask was still open. The notes show it closed on Sep 22.",
+      "caught_by": "Claude Code, before it built anything",
+      "decision": "Changed the test to expect \"Closed\".",
+      "rule": "The site shows the latest status word for word and never decides what is closed."
+    },
+    {
+      "date": "2026-10-02",
+      "where": "Mission Control site, Meetings page",
+      "what": "The first table listed 30 suggested items alongside 36 things people actually said.",
+      "caught_by": "My AI assistant, reviewing the page",
+      "decision": "Hid suggested items by default and added an owner filter.",
+      "rule": "Keep what was said and what was suggested apart by default."
+    },
+    {
+      "date": "2026-10-02",
+      "where": "Mission Control site, Meetings page",
+      "what": "The same promise appeared twice with two different statuses.",
+      "caught_by": "My AI assistant, reviewing the page",
+      "decision": "Left both rows and did not let the site guess.",
+      "rule": "Fix duplicates at the source, not by guessing in the tool."
+    },
+    {
+      "date": "2026-10-02",
+      "where": "Blind-spot-check agent",
+      "what": "One summary labelled a coaching point \"Coaching opportunity\", so the agent would have skipped it.",
+      "caught_by": "Claude Code, after creating the agent",
+      "decision": "The agent reads both labels, and the instructions now fix the labels.",
+      "rule": "Coaching points always use the same two labels."
+    },
+    {
+      "date": "2026-10-02",
+      "where": "Coach re-run, Sep 22",
+      "what": "The summary put a paraphrase in quote marks: \"add your name\". Nobody said those words.",
+      "caught_by": "My AI assistant, checking quotes against the transcript",
+      "decision": "Kept the summary and won't quote that line.",
+      "rule": "Quote marks are for exact words only."
+    },
+    {
+      "date": "2026-10-02",
+      "where": "Negotiation-prep agent, first run",
+      "what": "Claude widened my request when it started the agent, so the agent read transcripts, my Carnegie notes and the board, all outside its Sources.",
+      "caught_by": "My AI assistant, checking the answer against the files. Claude Code confirmed the cause.",
+      "decision": "Added a rule to each agent, and told Claude to pass my requests on unchanged.",
+      "rule": "A Sources line is only a description until a rule enforces it."
+    },
+    {
+      "date": "2026-10-02",
+      "where": "Negotiation-prep agent, first run",
+      "what": "Claude rewrote the agent's page with its own headings, so I couldn't see whether my format was followed.",
+      "caught_by": "My AI assistant",
+      "decision": "Told Claude to show the agent's answer unchanged.",
+      "rule": "Review what the agent wrote, not a summary of it."
+    },
+    {
+      "date": "2026-10-02",
+      "where": "Negotiation-prep agent, second run",
+      "what": "Its answer named a detail from a Manager-only note while telling me to keep those notes private.",
+      "caught_by": "My AI assistant, reading the answer",
+      "decision": "Added a rule to both agents and blurred the line in the video.",
+      "rule": "Private notes stay out of every answer, including warnings about them."
+    }
+  ]
+}

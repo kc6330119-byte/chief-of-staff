@@ -1,0 +1,19 @@
+[package]
+name = "chief-of-staff-core"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+description = "Reads the Chief of Staff for Managers workspace and answers the pages' requests. No network code."
+
+[lib]
+name = "chief_of_staff_core"
+
+[dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+comrak = { version = "0.55.0", default-features = false }
+fancy-regex = "0.19.2"
+regex = "1.13.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.151", features = ["preserve_order"] }
+url = "2.5.8"
+uuid = { version = "1.27.0", features = ["v4"] }

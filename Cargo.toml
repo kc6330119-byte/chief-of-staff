@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = ["core", "test-server", "app"]
+
+[workspace.package]
+edition = "2021"
+publish = false
+
+# A small release binary (SPEC.md, decision 59). Panics still unwind: the core catches a panic in a request
+# and answers 500, so `panic = "abort"` must not be set.
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+opt-level = "z"

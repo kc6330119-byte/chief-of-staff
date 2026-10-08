@@ -1,0 +1,24 @@
+[package]
+name = "chief-of-staff-app"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+description = "The Mac app: a window that shows the pages, answered by the core. No network port."
+
+[[bin]]
+name = "chief-of-staff"
+path = "src/main.rs"
+
+[features]
+# Lets tools/check-app.mjs drive a session from a script. Never on in a normal build.
+probe = []
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+chief-of-staff-core = { version = "0.1.0", path = "../core" }
+serde_json = "1.0.151"
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"

@@ -1,0 +1,57 @@
+[
+  {
+    "title": "How to Win Friends and Influence People",
+    "author": "Dale Carnegie",
+    "year": 1936,
+    "rating": 5,
+    "read": "Yes",
+    "date_read": "2021-05-15",
+    "used_by": [
+      "Coach"
+    ],
+    "notes": "library/carnegie-notes.md"
+  },
+  {
+    "title": "Getting More: How to Negotiate to Achieve Your Goals in the Real World",
+    "author": "Stuart Diamond",
+    "year": 2010,
+    "rating": 5,
+    "read": "Yes",
+    "date_read": "2011-05-15",
+    "used_by": [
+      "Coach",
+      "Negotiation prep"
+    ],
+    "notes": "library/getting-more-notes.md"
+  },
+  {
+    "title": "The 7 Habits of Highly Effective People",
+    "author": "Stephen Covey",
+    "year": 1989,
+    "rating": 4,
+    "read": "Yes",
+    "date_read": "2002-03-15",
+    "used_by": [],
+    "notes": "library/covey-notes.md"
+  },
+  {
+    "title": "Good to Great: Why Some Companies Make the Leap... and Others Don't",
+    "author": "Jim Collins",
+    "year": 2001,
+    "rating": null,
+    "read": "No",
+    "date_read": null,
+    "used_by": [],
+    "notes": null
+  },
+  {
+    "title": "Extreme Ownership: How U.S. Navy SEALs Lead and Win",
+    "author": "Jocko Willink and Leif Babin",
+    "year": 2015,
+    "rating": null,
+    "read": "No",
+    "date_read": null,
+    "used_by": [],
+    "notes": null
+  }
+]

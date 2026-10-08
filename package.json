@@ -1,0 +1,22 @@
+{
+  "name": "chief-of-staff",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chief of Staff for Managers: a local Mac app for a manager's meeting summaries, board, library and agents, built on a Rust core",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "check:app": "node tools/check-app.mjs",
+    "app": "cd app && tauri dev",
+    "build:app": "node tools/build-app.mjs",
+    "package": "node tools/package.mjs",
+    "check:release": "node tools/check-release.mjs",
+    "publish-folder": "node tools/publish.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.1"
+  }
+}
