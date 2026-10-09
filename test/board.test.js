@@ -313,8 +313,9 @@ describe('changes, recorded in actions/ledger.json', () => {
     assert.equal(row.closed, AS_OF);
     for (const r of after.filter((x) => x.id !== 'A-260505-3' && x.id !== 'A-260728-2')) assert.equal(r.closed, null, r.id ?? r.text);
     assert.deepEqual(row.chip, { rule: 'closed', tone: 'neutral', text: 'Closed Sep 22' });
-    // Only the closed item's chip changes with it.
-    const strip = (rows) => rows.map(({ closed, chip, ...rest }) => (rest.id === 'A-260505-3' ? rest : { ...rest, chip }));
+    assert.equal(row.column, 'done');
+    // Only the closed item's chip and column change with it.
+    const strip = (rows) => rows.map(({ closed, chip, column, ...rest }) => (rest.id === 'A-260505-3' ? rest : { ...rest, chip, column }));
     assert.deepEqual(strip(after), strip(before), 'the rows are otherwise as they were');
 
     const page = await openPage(site, '#/meetings');

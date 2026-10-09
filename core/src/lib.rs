@@ -11,6 +11,7 @@ use serde_json::{json, Map, Value};
 
 pub mod agents;
 pub mod board;
+pub mod briefing;
 pub mod corrections;
 pub mod js;
 pub mod ledger;
@@ -351,8 +352,9 @@ impl Core {
         let private = param("private").as_deref() == Some("1");
         Ok(match route {
             Route::Config => json!({ "demo": self.demo(), "dataRoot": ws.root().file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default() }),
-            Route::Today => today::today_view(ws, self.demo())?,
-            Route::TodayAct(id, action) => today::act(ws, self.demo(), &id, &action, body)?,
+            // ?week=this|last picks the briefing's week.
+            Route::Today => today::today_view(ws, self.demo(), briefing::Week::parse(param("week").as_deref())?)?,
+            Route::TodayAct(id, action) => today::act(ws, self.demo(), &id, &action, body, briefing::Week::parse(param("week").as_deref())?)?,
             Route::Meetings => {
                 let overview = meetings::meetings_overview(ws, self.demo())?;
                 self.log_warnings(&overview["warnings"]);

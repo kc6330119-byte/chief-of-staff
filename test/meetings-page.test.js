@@ -100,3 +100,34 @@ test('the Attendee filter narrows the list of summaries', async () => {
   await page.choose('attendee-filter', '');
   assert.equal(links(page.el('meeting-list').innerHTML).length, data.meetings.length);
 });
+
+test('"Hide closed" also hides an item closed on the Board; it and one reported done in a summary both look closed', async () => {
+  const own = await startSite();
+  try {
+    // A-260505-3 is open in every summary and closed only on the Board.
+    assert.equal((await own.api.moveCard('A-260505-3', 'done')).status, 200);
+    const tracked = await own.api.tracked();
+    const item = (id) => tracked.find((r) => r.id === id && r.kind === 'action item');
+    assert.deepEqual([item('A-260505-3').state, item('A-260505-3').column], ['open', 'done']);
+    // A-260728-4 is reported done in the Sep 15 summary and open on the Board.
+    assert.deepEqual([item('A-260728-4').state, item('A-260728-4').column], ['done', 'todo']);
+    assert.equal(own.api.ledger().items['A-260728-4'], undefined);
+
+    const p = await openPage(own, '#/meetings');
+    assert.match(p.html(), /Hide closed/);
+    assert.doesNotMatch(p.html(), /Hide done and dropped/);
+    const drawn = (id) => p.rows('tracked-body').find((r) => r.includes(`>${id}<`));
+    for (const id of ['A-260505-3', 'A-260728-4']) assert.match(drawn(id), /^ class="is-closed"/, id);
+    assert.doesNotMatch(drawn('A-260505-1'), /^ class="is-closed"/);
+
+    await p.choose('hide-closed', true);
+    assert.equal(drawn('A-260505-3'), undefined, 'closed on the Board');
+    assert.equal(drawn('A-260728-4'), undefined, 'reported done in a summary');
+    assert.ok(drawn('A-260505-1'), 'an open item is still shown');
+
+    await p.choose('hide-closed', false);
+    assert.ok(drawn('A-260505-3') && drawn('A-260728-4'));
+  } finally {
+    await own.stop();
+  }
+});

@@ -392,7 +392,7 @@ describe('one person\'s page: what the page draws, and Close and Re-date', () =>
     assert.doesNotMatch(r, /today-owner|Sam Torres/);
     assert.doesNotMatch(itemRow(page, 'A-260820-1'), /today-owner|Sammy/);
     assert.match(r, />A-260820-4</);
-    assert.match(r, new RegExp(`From <a href="#/meetings/${enc(M_SAM)}"[^>]*>Kevin &amp; Sam: 1:1, Aug 20</a>`));
+    assert.match(r, new RegExp(`From <a href="#/meetings/${enc(M_SAM)}"[^>]*>Kevin &amp; Sam: 1:1, <span class="nowrap">Aug 20</span></a>`));
     assert.deepEqual(buttons(r), [['close', 'Close']]);
   });
 
@@ -463,15 +463,18 @@ describe('one person\'s page: what the page draws, and Close and Re-date', () =>
   });
 });
 
-describe('Today\'s People rows link to the person\'s page', () => {
+describe('Today\'s Team health leads to People, and People to each person\'s page', () => {
   let site;
   before(async () => { site = await startSite({ prepare: writeFixture }); });
   after(async () => { await site?.stop(); });
 
-  test('each report row links to #/people/<name>', async () => {
+  test('Team health\'s people rows and "View People" link to #/people; each report there links to #/people/<name>', async () => {
     const page = await openPage(site, '#/today');
-    const people = page.el('today-body').innerHTML.split('id="group-people"')[1];
-    for (const name of ['Sam Torres', 'Riley Brooks', 'Alex Kim']) assert.match(people, new RegExp(`href="#/people/${enc(name)}"`), name);
+    const team = page.el('today-body').innerHTML.split('id="group-team"')[1];
+    for (const id of ['team-heavy', 'team-missed']) assert.match(team, new RegExp(`id="${id}" href="#/people"`), id);
+    assert.match(team, /<a class="btn team-view" href="#\/people">View People<\/a>/);
+    const people = await openPage(site, '#/people');
+    for (const name of ['Sam Torres', 'Riley Brooks', 'Alex Kim']) assert.match(people.el('people-body').innerHTML, new RegExp(`href="#/people/${enc(name)}"`), name);
   });
 });
 

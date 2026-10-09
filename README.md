@@ -10,11 +10,11 @@ A Rust core reads and writes the files and answers every request. The interface 
 JavaScript inside a native macOS window (the system's own WebKit, through Tauri). There is no server, no
 browser and no network port.
 
-Version 0.2.0, built from Mission Control Native 0.1.1.
+Version 0.3.0, built from Mission Control Native 0.1.1.
 
 ## Download
 
-Download `Chief-of-Staff-for-Managers-0.2.0-universal.dmg` from [the latest release][latest]. It runs on
+Download `Chief-of-Staff-for-Managers-0.3.0-universal.dmg` from [the latest release][latest]. It runs on
 macOS 13 or later, on Apple silicon and Intel Macs.
 
 1. Open the `.dmg`. A window shows the app and a shortcut to Applications.
@@ -36,8 +36,9 @@ On first launch the app asks for your workspace folder. You can:
   below.
 - **Open Sample…** to save a copy of the sample workspace to a folder you name, and open it. The sample is
   fictional: an invented company and team, and one real name, the manager's. Its three book-notes files are
-  placeholders. While it is open, the sidebar shows "Recreated demo data". The sample never replaces a file
-  or folder that already exists.
+  placeholders. Its `actions/ledger.json` has four items already closed, on Sep 16 and Sep 22, so Today's
+  Completed tile and activity chart have something to show. While it is open, the sidebar shows "Recreated
+  demo data". The sample never replaces a file or folder that already exists.
 - **Quit.**
 
 The app remembers the folder. To switch, use File ▸ Choose Workspace… (⌘O), File ▸ New Workspace… or
@@ -62,15 +63,21 @@ Then start a new Claude Code session in the folder.
 The sidebar holds six pages. The app opens on Today. Below them, **Help** opens the Help page: getting
 started, everyday use, an FAQ and troubleshooting. `help.md` in this repository is the same text.
 
-- **Today**: "I owe", "Owed to me" and "Needs your confirmation", then People. A row shows the item's ID, its
-  due date and the meeting it came from, with a chip for anything past due or due within a week, and an
-  "Open N days" chip for an item with no due date that is more than 30 days old. Close, Reopen and Re-date work here. "Needs your confirmation" lists items a summary reports
-  done or dropped that are still open in the app, and items closed in the app that a later summary still
-  mentions: Keep open, Keep closed, Close or Reopen. If `people.md` has no single person marked "me", the
-  first two groups become one, "Open items". The sidebar's Today item shows how many rows need you.
+- **Today**: a briefing, counted to the as-of date (today, or the sample's newest meeting). Five tiles: Due
+  today, Overdue and Due this week, each of which filters the list, then Completed and Team alerts. "Needs you
+  now" lists your items and those owed to you that are past due, due within a week or open more than 30
+  days, then the items a later summary disagrees with your Board about: Close, Re-date, Keep open, Keep
+  closed and Reopen work here. Team health shows heavy loads, overdue items owed to you, reports with no 1:1
+  in 30+ days, and how many items await your input. A Week picker, This week or Last week, starts on This
+  week each time and changes Completed, the reflections (the Coach's own bold headlines from that week's
+  summaries, word for word) and the week in numbers; Your overdue items and 1:1 coverage stay as of
+  the as-of date, and say so. A chart shows six weeks of items created, completed and overdue. Search, at
+  the top, finds action items, meetings and people, and never searches a note's text or a Manager-only
+  note. If `people.md` has no single person marked "me", the list holds those items whoever owns them, and
+  Team health says why it can't be shown. The sidebar's Today item shows how many rows need you.
 - **Meetings**: every summary, newest first, and "Tracked items across all meetings": each action item with its
-  ID, owner, first-seen date, age and latest status, word for word. Filters: hide done and dropped, hide
-  suggested, and owner. The list of summaries has its own filter, Attendee, which shows only the meetings that
+  ID, owner, first-seen date, age and latest status, word for word. Filters: Hide closed (closed on the
+  Board, or reported done or dropped in a summary), Hide suggested, and owner. The list of summaries has its own filter, Attendee, which shows only the meetings that
   person attended.
 - **Board**: To do, Doing, Done. Every action item with a usable ID is a card, in To do until you move it.
   Moving a card into Done closes it; moving it out reopens it. Drag cards, or use the arrows and the Close and
@@ -327,7 +334,8 @@ notes files it lists, `corrections/corrections.json`, `actions/ledger.json` and 
 It writes only four files in the workspace:
 
 - `actions/ledger.json`: what you close, reopen, re-date, accept and keep, and the order of the Board's
-  columns. Created on the first change; opening a page writes nothing.
+  columns. In a new workspace it is created on the first change; the sample comes with one. Opening a page
+  writes nothing.
 - `notes/notes.json`: your notes between meetings. Created on the first note.
 - `library/books.json`
 - `corrections/corrections.json`

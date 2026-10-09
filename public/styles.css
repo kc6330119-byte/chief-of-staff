@@ -1,4 +1,5 @@
-/* The look follows design/reference-today.html and design/reference-board.html: light only, system fonts only. */
+/* The look follows design/reference-briefing.html (Today), design/reference-today.html and design/reference-board.html:
+   light only, system fonts only. */
 :root {
   --page: #F6F7F9;
   --sidebar: #ECEEF2;
@@ -17,6 +18,14 @@
   --neutral: #3D4755;
   --quote: #F1F3F6;
   --control: #C3C9D2;
+  --late-border: #E8C690;
+  --late-tile: #FFF8EC;
+  --good: #1D5B40;
+  --good-bg: #F0F8F4;
+  --good-border: #B9DCCB;
+  --chart-created: #2450C8;
+  --chart-completed: #2F8A5F;
+  --chart-overdue: #B4470E;
   --danger: #B42318;
   --radius-panel: 12px;
   --radius-card: 10px;
@@ -343,12 +352,174 @@ table.data tr:last-child td { border-bottom: 0; }
 
 /* ---------- today ---------- */
 
-body[data-page="today"] main > * { max-width: 1040px; }
+body[data-page="today"] main > * { max-width: 1120px; }
 .today-head { margin-bottom: 20px; }
 #today-sub:empty { display: none; }
 .today { display: flex; flex-direction: column; gap: 20px; }
-.today-start { margin: 0; font-size: 15px; }
 .today .notice { margin: 0; }
+
+/* The header: the as-of date, the greeting and the counts; Search, the week and Reload beside them, or under them when
+   there isn't room. */
+.today-date { margin: 0 0 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.today-hello h1 { font-size: 30px; }
+.today-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.today-tools > [hidden] { display: none; }
+.today-field { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.today-search { position: relative; }
+.today-search input, .today-week select {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--control);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+}
+.today-search input { width: 260px; max-width: 100%; }
+
+/* Search results: a list under the box, grouped by kind, each a link. */
+.search-results {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 380px;
+  max-width: calc(100vw - 48px);
+  max-height: min(480px, 70vh);
+  overflow-y: auto;
+  padding: 8px 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 8px 24px rgba(23, 27, 34, 0.14);
+}
+.search-results[hidden] { display: none; }
+.search-count { margin: 0; padding: 4px 14px 6px; font-size: 12px; color: var(--muted); }
+.search-group h3 { margin: 0; padding: 8px 14px 4px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.search-n { font-weight: 600; }
+.search-group ul { list-style: none; margin: 0; padding: 0; }
+.search-group a { display: block; padding: 6px 14px; color: var(--text); text-decoration: none; }
+.search-group a:hover, .search-group a:focus-visible { background: var(--page); color: var(--text); }
+.search-main { display: block; font-size: 14px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.search-sub { display: block; font-size: 12px; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
+.search-more { margin: 0; padding: 2px 14px 6px; font-size: 12px; color: var(--muted); }
+
+/* A button that reads as a link: "Show all", "1 more", "Show everything". */
+.link-btn { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.link-btn:hover { color: var(--accent-hover); }
+
+/* The five tiles. The first three filter the list (pressed while they do); Completed and Team alerts are links. */
+.brief-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.tile:hover { border-color: #9AA3B0; color: var(--text); }
+.tile-label { font-size: 13px; font-weight: 600; color: var(--muted); }
+.tile-count { font-size: 30px; font-weight: 700; line-height: 1.1; }
+.tile-sub { font-size: 12px; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
+.tile-late { border-color: var(--late-border); background: var(--late-tile); }
+.tile-late:hover { border-color: var(--late); }
+.tile-late .tile-label, .tile-late .tile-count, .tile-late .tile-sub { color: var(--late); }
+.tile-good { border-color: var(--good-border); background: var(--good-bg); }
+.tile-good:hover { border-color: var(--good); }
+.tile-good .tile-label, .tile-good .tile-count, .tile-good .tile-sub { color: var(--good); }
+.tile.is-on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* The panels. Needs you now and Team health sit side by side; Team health drops below when there isn't room. */
+.brief-panel { min-width: 0; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-panel); overflow: hidden; }
+.brief-main { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px; }
+.brief-main .now { flex: 3 1 560px; }
+.brief-main .team { flex: 1 1 280px; }
+.brief-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; align-items: start; }
+
+.now-head { justify-content: space-between; }
+/* Today's chips take a narrower column than a person's page, as in the reference; a long one wraps inside it. */
+.now .today-chip { flex-basis: 150px; }
+.now-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.now-title h2 { margin: 0; }
+.now-filter { padding: 0 20px 12px; font-size: 13px; line-height: 1.45; }
+.now-empty { padding: 0 20px 18px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+
+.team-row { display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-top: 1px solid var(--line); color: var(--text); text-decoration: none; }
+.team-row:hover { background: var(--page); color: var(--text); }
+.team-count { flex: 0 0 36px; height: 36px; display: grid; place-items: center; border-radius: 18px; background: var(--neutral-bg); font-size: 15px; font-weight: 700; }
+.team-count-late { background: var(--late-bg); color: var(--late); }
+.team-count-soon { background: var(--soon-bg); color: var(--soon); }
+.team-text { flex: 1; min-width: 0; }
+.team-name { display: block; font-size: 14px; font-weight: 600; line-height: 1.35; }
+.team-sub { display: block; font-size: 12px; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
+.team-foot { padding: 12px 20px 16px; border-top: 1px solid var(--line); }
+.team-view { width: 100%; }
+
+/* The coach's reflections: the headline, a click shows the whole of it in place. */
+.reflections-head { padding: 16px 20px 8px; }
+.reflections-head h2 { margin: 0; }
+.reflections-head .today-group-sub { display: block; margin-top: 2px; }
+.reflection-list { list-style: none; margin: 0; padding: 0 20px 8px; }
+.reflection { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.reflection-dot { flex: 0 0 8px; height: 8px; margin-top: 7px; border-radius: 4px; }
+.dot-went-well { background: var(--chart-completed); }
+.dot-could-do-better { background: var(--chart-overdue); }
+.reflection-text { flex: 1; min-width: 0; padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 14px; line-height: 1.4; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.reflection-text:hover { color: var(--accent); }
+.reflection-date { flex: 0 0 auto; font-size: 12px; line-height: 20px; white-space: nowrap; }
+.reflections-more { padding: 0 20px 16px; }
+.reflections-none { padding: 4px 20px 18px; font-size: 14px; color: var(--muted); }
+
+/* The week in numbers. */
+.numbers, .activity { padding: 16px 20px 18px; }
+.numbers h2, .activity h2 { margin: 0; }
+.numbers > .today-group-sub { display: block; margin-top: 2px; }
+.number-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 14px 0 0; }
+.number { min-width: 0; }
+.number dt { font-size: 13px; color: var(--muted); }
+.number dd { margin: 0; }
+.number-value { font-size: 26px; font-weight: 700; line-height: 1.25; }
+.number-late { color: var(--late); }
+.number-note { font-size: 12px; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
+
+/* Weekly activity: a line chart drawn as SVG. Created is a filled dot, Completed a square and Overdue a diamond, so
+   lines on top of each other can be told apart. */
+.activity-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; list-style: none; margin: 0; padding: 0; font-size: 12px; color: var(--neutral); }
+.chart-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.legend-mark { flex: none; }
+.activity-chart { display: block; width: 100%; height: auto; margin-top: 10px; }
+.chart-grid { stroke: var(--line); stroke-width: 1; }
+.chart-axis { fill: var(--muted); font-size: 11px; text-anchor: end; }
+.chart-week { fill: var(--muted); font-size: 11px; text-anchor: middle; }
+.chart-line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.line-created { stroke: var(--chart-created); }
+.line-completed { stroke: var(--chart-completed); }
+.line-overdue { stroke: var(--chart-overdue); }
+.mark-created { fill: var(--chart-created); }
+.mark-completed { fill: none; stroke: var(--chart-completed); stroke-width: 2; }
+.mark-overdue { fill: none; stroke: var(--chart-overdue); stroke-width: 2; }
+.chart-band { fill: transparent; }
+.chart-hover:hover .chart-band { fill: rgba(36, 80, 200, 0.06); }
+.chart-tip { visibility: hidden; pointer-events: none; }
+.chart-hover:hover .chart-tip { visibility: visible; }
+.chart-tip-box { fill: var(--panel); stroke: var(--border); }
+.chart-tip-head { fill: var(--text); font-size: 11px; font-weight: 700; }
+.chart-tip-text { fill: var(--text); font-size: 11px; }
+.tip-created { fill: var(--chart-created); }
+.tip-completed { fill: var(--chart-completed); }
+.tip-overdue { fill: var(--chart-overdue); }
+.chart-note { margin-top: 6px !important; font-size: 12px; line-height: 1.45; color: var(--muted); }
 
 .today-group { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-panel); overflow: hidden; }
 .today-group-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 16px 20px; }

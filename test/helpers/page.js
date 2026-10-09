@@ -33,10 +33,11 @@ function element(id) {
     querySelector: () => null,
     querySelectorAll: () => [],
     addEventListener(type, fn) { (listeners[type] ||= []).push(fn); },
-    // `target` is the event's target when given (a click on something inside this element); the other props are set on it.
+    // `target` is the event's target when given (a click on something inside this element); the other props are set on it,
+    // and on the event too, so a key press can say which key.
     async fire(type, { target, ...props } = {}) {
       Object.assign(this, props);
-      for (const fn of listeners[type] || []) await fn({ type, target: target ?? this, currentTarget: this, preventDefault() {} });
+      for (const fn of listeners[type] || []) await fn({ ...props, type, target: target ?? this, currentTarget: this, preventDefault() {} });
     },
   };
 }

@@ -255,6 +255,41 @@ pub fn render_markdown(src: &str, show_private: bool) -> Rendered {
     Rendered { html, private_notes: count }
 }
 
+/// A list item's own text, as runs of text each marked bold or not.
+pub type Runs = Vec<(String, bool)>;
+
+/// Every list item in `src`, at any depth and in order, as its own paragraphs (not the lists inside it). A
+/// "Manager-only note" and everything inside one is left out, as the summary page leaves it out.
+pub fn list_items(src: &str) -> Vec<Runs> {
+    let arena = Arena::new();
+    let opts = options();
+    let doc = parse_document(&arena, src, &opts);
+    let lines = split_lines(src);
+    let (mut count, mut private) = (0, Private::new());
+    handle_private(doc, &lines, false, &mut count, &mut private);
+    doc.descendants().filter(|n| is_item(n)).map(|item| {
+        let mut runs = Runs::new();
+        for p in item.children().filter(|c| matches!(c.data().value, NodeValue::Paragraph)) {
+            if !runs.is_empty() { runs.push((" ".into(), false)); }
+            inline_runs(p, false, &mut runs);
+        }
+        runs
+    }).collect()
+}
+
+fn inline_runs<'a>(node: &'a AstNode<'a>, bold: bool, out: &mut Runs) {
+    for n in node.children() {
+        match &n.data().value {
+            NodeValue::Text(t) => out.push((t.to_string(), bold)),
+            NodeValue::Code(c) => out.push((c.literal.clone(), bold)),
+            NodeValue::HtmlInline(h) => out.push((h.clone(), bold)),
+            NodeValue::SoftBreak | NodeValue::LineBreak => out.push((" ".into(), bold)),
+            NodeValue::Strong => inline_runs(n, true, out),
+            _ => inline_runs(n, bold, out),
+        }
+    }
+}
+
 static BLOCK_START: LazyLock<regex::Regex> = LazyLock::new(|| js::re(
     r"^( {0,3})(#{1,6}(?:[ \t]|$)|>|[-+*](?:[ \t]|$)|[0-9]{1,9}[.)](?:[ \t]|$)|(?:\*[ \t]*){3,}$|(?:_[ \t]*){3,}$|(?:-[ \t]*){3,}$|=+[ \t]*$|```|~~~|<|\[[^\]]*\]:)",
     "",

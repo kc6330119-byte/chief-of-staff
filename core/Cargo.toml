@@ -1,6 +1,6 @@
 [package]
 name = "chief-of-staff-core"
-version = "0.2.0"
+version = "0.3.0"
 edition.workspace = true
 publish.workspace = true
 description = "Reads the Chief of Staff for Managers workspace and answers the pages' requests. No network code."

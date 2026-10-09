@@ -2,8 +2,16 @@
 // normal release build), runs a session of reads and saves in the real window, restarts it, and checks:
 //   - what changed outside the workspace: only the settings file, holding the folder path and nothing else
 //   - what changed inside the workspace: only actions/ledger.json, notes/notes.json, books.json and corrections.json
-//   - the app opens on Today; at 1440 and 1100 px Today draws its groups with nothing overflowing and no chip or
-//     title cut off; Close on Today closes the item and the row updates in place
+//   - the app opens on Today; at 1440 and 1100 px Today draws its five tiles and every panel with nothing overflowing and
+//     nothing cut off, Team health beside the list at 1440 px and below it at 1100 px; Close on Today closes the item and
+//     the row updates in place
+//   - Today on the sample as shipped (0.3.0): the five tiles show the sample's values, a filter tile filters the list and
+//     a second click clears it, the Week picker changes Completed, the numbers' heading and the reflections, and Your
+//     overdue items and 1:1 coverage say "as of" the as-of date with Last week picked, a meeting link's date never
+//     breaks at 1440 or 1100 px, the chart
+//     draws 6 weeks and 18 points, Search finds Riley among the action items, meetings and people, no private note text
+//     or Manager-only note is on the page, and nothing is written; the starter's Today has no errors; screenshots of
+//     Today at 1440 and 1100 px and with Last week picked
 //   - the sidebar is Today, Meetings, Board, People, Agents, Library; at 1440 and 1100 px People, one person's page
 //     and Agents (with "Rules learned") are drawn with nothing overflowing and nothing cut off, and People's columns
 //     line up whether or not a row has a flag; #/corrections opens
@@ -197,9 +205,10 @@ async function run(profile, label, env, { timeout = 180000, untilWindow = false 
   return log;
 }
 
-const probeScript = (mode) => {
+const probeScript = (mode, privateTexts = []) => {
   const p = path.join(OUT, `probe-${mode}.js`);
   fs.writeFileSync(p, fs.readFileSync(path.join(REPO, 'tools', 'check-app-probe.js'), 'utf8').replace('__MODE__', mode)
+    .replace("'__PRIVATE_TEXTS__'", JSON.stringify(privateTexts))
     .replace("'__ODD_NAME__'", JSON.stringify(ODD_NAME))
     .replace("'__NOTE_TEXT__'", JSON.stringify(NOTE_TEXT)).replace("'__MEETING_NOTE__'", JSON.stringify(MEETING_NOTE)));
   return p;
@@ -246,6 +255,31 @@ await run('debug', 'unreadable-files', { MC_PROBE_WORKSPACE: wsUnreadable, MC_PR
 const filesCreated = ['library/books.json', 'corrections/corrections.json'].filter((f) => fs.existsSync(path.join(wsMissing, f)));
 const ledgerAfterOpeningBoard = fs.existsSync(path.join(wsMissing, 'actions', 'ledger.json'));
 const unreadableKept = ['library/books.json', 'corrections/corrections.json'].every((f) => fs.readFileSync(path.join(wsUnreadable, f), 'utf8') === '{ this is not JSON');
+
+// Today on the sample as shipped, with its ledger and one note between meetings, and on the starter workspace. Each is
+// its own copy, and neither run may change it.
+const wsBriefing = `${WS}-briefing`;
+const wsStarter = `${WS}-starter`;
+fs.cpSync(DATA, wsBriefing, { recursive: true });
+fs.writeFileSync(path.join(wsBriefing, '.sample-workspace'), 'Marks this copy as the sample, so the demo badge shows.\n');
+const BRIEFING_NOTE = 'Kumquat: Sam mentioned it in the hallway, between meetings.';
+fs.mkdirSync(path.join(wsBriefing, 'notes'), { recursive: true });
+fs.writeFileSync(path.join(wsBriefing, 'notes', 'notes.json'), `${JSON.stringify({ version: 1, notes: [
+  { id: 'N-0c0ffee1', date: '2026-09-21', person: 'Sam Torres', meeting: null, item: null, text: BRIEFING_NOTE, created: '2026-09-21T09:00:00.000Z' },
+] }, null, 2)}\n`);
+fs.cpSync(path.join(REPO, 'starter-workspace'), wsStarter, { recursive: true });
+// What may never show on Today: the start of each Manager-only note in the summaries, as the page shows it (no Markdown
+// marks), and the note between meetings.
+const privateTexts = [BRIEFING_NOTE.slice(0, 30), ...fs.readdirSync(path.join(wsBriefing, 'meeting-notes')).filter((f) => f.endsWith('.md'))
+  .flatMap((f) => fs.readFileSync(path.join(wsBriefing, 'meeting-notes', f), 'utf8').split('\n'))
+  .map((line) => line.match(/manager-only note:?\**:?\s*(.+)$/i)?.[1]).filter(Boolean)
+  .map((t) => t.replace(/[*_`]/g, '').trim().slice(0, 40))];
+const briefingBefore = hashTree(wsBriefing);
+const starterBefore = hashTree(wsStarter);
+await run('debug', 'briefing', { MC_PROBE_WORKSPACE: wsBriefing, MC_PROBE: probeScript('briefing', privateTexts) }, { timeout: 120000 });
+await run('debug', 'starter', { MC_PROBE_WORKSPACE: wsStarter, MC_PROBE: probeScript('starter') }, { timeout: 60000 });
+const briefingChanged = changed(briefingBefore, hashTree(wsBriefing));
+const starterChanged = changed(starterBefore, hashTree(wsStarter));
 
 // The File menu, opened over the Help page, for its screenshot.
 await run('debug', 'file-menu', { MC_PROBE_WORKSPACE: WS, MC_PROBE: probeScript('file-menu') }, { timeout: 60000 });
@@ -295,6 +329,21 @@ const HELP_SECTIONS = ['Getting started', 'Make it your own', 'Everyday use', 'F
 const help = one('help');
 const fileMenu = one('file-menu');
 const shotsTaken = fs.readdirSync(SHOTS);
+const briefing = one('briefing', 'briefing');
+const starter = one('starter', 'starter');
+// Today's layout at 1440 and 1100 px, in the session's workspace and on the sample: the tiles and the six panels, Team
+// health beside the list at 1440 and below it at 1100.
+const TODAY_PANELS = 'Needs you now,Team health,What went well,What I could do better,This week in numbers,Weekly activity';
+const todayLayoutOk = (run) => [1440, 1100].every((w) => ev('today-layout', run).some((x) => Math.abs(x.width - w) <= 1
+  && x.tiles === 5 && x.panels.join() === TODAY_PANELS && x.rows > 0 && x.problemCount === 0
+  && (w === 1440 ? x.teamBeside : x.teamBelow)));
+// The sample's values, as test/briefing.test.js has them.
+const SAMPLE_TILES = {
+  'due-today': ['Due today', '0', 'Nothing due today'], overdue: ['Overdue', '4', '3 over 30 days'],
+  'due-this-week': ['Due this week', '0', 'Next: 3 due Tue, Sep 29'], completed: ['Completed', '2', 'This week · 2 last week'],
+  'team-alerts': ['Team alerts', '0', 'No one flagged'],
+};
+const SAMPLE_OVERDUE = ['A-260505-2', 'A-260505-3', 'A-260505-4', 'A-260915-4'];
 
 const checklist = {
   'no listening port for the app\'s process (lsof)': verdict(lsofClean && Object.keys(lsofs).length >= 3),
@@ -353,8 +402,40 @@ const checklist = {
     && agentCards.closedAgain.every((c) => c.open === false)),
   'Agents: after leaving the page and coming back, every card is closed again': verdict(
     agentCards?.afterReturn.length === agentNames.length && agentCards.afterReturn.every((c) => c.open === false)),
-  'Today at 1440 px and at 1100 px wide: its groups are drawn, nothing overflows its group, and no chip, title or ID is cut off': verdict(
-    [1440, 1100].every((w) => ev('today-layout').some((x) => Math.abs(x.width - w) <= 1 && x.groups.length >= 3 && x.rows > 0 && x.problemCount === 0))),
+  'Today at 1440 px and at 1100 px wide, in the session\'s workspace and on the sample: the five tiles and every panel are drawn, nothing overflows, nothing is cut off, and Team health is beside the list at 1440 px and below it at 1100 px': verdict(
+    todayLayoutOk('session') && todayLayoutOk('briefing')),
+  'Today on the sample: the five tiles show the sample\'s values': verdict(
+    JSON.stringify(briefing?.tiles) === JSON.stringify(SAMPLE_TILES) && briefing?.rows.length === 7 && /^Good (morning|afternoon|evening), Kevin\.$/.test(briefing?.greeting || '')),
+  'Today: the Overdue tile filters the list to its 4 items and is named above it; a second click clears it': verdict(
+    briefing?.filtered.rows.slice().sort().join() === SAMPLE_OVERDUE.join() && /^Filtered to Overdue: 4 items of 11\./.test(briefing.filtered.named || '')
+    && briefing.filtered.pressed === 'true' && briefing.cleared.rows.join() === briefing.rows.join() && !briefing.cleared.named && briefing.cleared.pressed === 'false'),
+  'Today: the Week picker changes Completed, the numbers\' heading and the reflections, and is back on This week on the next visit': verdict(
+    briefing?.lastWeek.completed.join('|') === 'Completed|2|Last week · 2 this week' && briefing.lastWeek.heading === 'Last week in numbers'
+    && briefing.lastWeek.reflections.length > 0 && briefing.lastWeek.reflections.every(([h, d]) => h === '#/meetings/2026-09-15_kevin-sam_1on1.md' && d === 'Sep 15')
+    && briefing.thisWeekReflections.length > 0 && briefing.thisWeekReflections.every(([h, d]) => h === '#/meetings/2026-09-22_dana-kevin_1on1.md' && d === 'Sep 22')
+    && briefing.weekAfterReturn === 'this'),
+  'Today: with Last week picked, Your overdue items and 1:1 coverage say "as of Sep 22"; with This week, their own lines': verdict(
+    briefing?.lastWeek.notes.join('|') === 'as of Sep 22|as of Sep 22'
+    && briefing.thisWeekNotes.join('|') === 'items you own, past due|reports met in 14 days'),
+  'Today: a meeting link\'s date never breaks ("Sep 15" stays on one line), at 1440 px and at 1100 px wide, in the session\'s workspace and on the sample': verdict(
+    ['session', 'briefing'].every((run) => [1440, 1100].every((w) => ev('today-layout', run).some((x) => Math.abs(x.width - w) <= 1
+      && x.meetingDates.count > 0 && x.meetingDates.wrapped.length === 0)))),
+  'Today: the activity chart draws 6 weeks and 18 points, each labelled with its value': verdict(
+    briefing?.chart.weeks.join() === 'Aug 17,Aug 24,Aug 31,Sep 7,Sep 14,Sep 21' && briefing.chart.points === 18 && briefing.chart.labelled === 18),
+  'Today: Search finds Riley among the action items, the meetings and the people, and Escape clears it': verdict(
+    briefing?.search.items.some((t) => t.includes('Riley Brooks')) && briefing.search.meetings.some((t) => t.includes('Riley'))
+    && briefing.search.people.some((t) => t.startsWith('Riley Brooks')) && briefing.search.cleared === true),
+  'Today: no note text and no Manager-only note on the page, with the list and every reflection opened, in either week': verdict(
+    privateTexts.length > 1 && Array.isArray(briefing?.privateThisWeek) && briefing.privateThisWeek.length === 0 && briefing.privateLastWeek.length === 0),
+  'Today: opening it, filtering, searching and picking a week wrote nothing (the sample and the starter)': verdict(
+    !!briefing && !!starter && briefingChanged.length === 0 && starterChanged.length === 0),
+  'the starter\'s Today: the tiles show 0, the list says there is nothing yet and links to Help, and there are no errors': verdict(
+    !!starter && !starter.error && !starter.bad && !starter.invalidDate && starter.couldNotRead === 0
+    && Object.values(starter.tiles).every((t) => t[1] === '0') && Object.keys(starter.tiles).length === 5
+    && /^Nothing yet: there are no meeting summaries\./.test(starter.empty || '') && starter.help === 'Help' && starter.rows === 0 && starter.points === 18),
+  'screenshots of Today at 1440 px and 1100 px, and with Last week picked': verdict(
+    ['briefing-today.png', 'briefing-today-lower.png', 'briefing-today-1100.png', 'briefing-today-1100-team.png', 'briefing-today-1100-lower.png',
+      'briefing-today-last-week.png', 'briefing-today-last-week-lower.png', 'starter-today.png'].every((f) => shotsTaken.includes(f))),
   'Close on Today closes the item; its row stays in place with Reopen, and one line says what happened': verdict(
     one('today-closed')?.column === 'done' && one('today-closed')?.inPlace === true && one('today-closed')?.reopenButton === true
     && /^Closed “/.test(one('today-closed')?.status || '')),
@@ -424,9 +505,13 @@ const checklist = {
   'the Board shows the action items in To do with no import, and opening it writes nothing': verdict(
     one('board-open')?.cards > 0 && one('board-open')?.todo === one('board-open')?.cards && one('board-open')?.importButton === false
     && one('missing-files', 'missing-files')?.board?.cards > 0 && !one('missing-files', 'missing-files')?.board?.error && !ledgerAfterOpeningBoard),
-  'the sample workspace ships without board.json, actions/ledger.json or notes/notes.json': verdict(
-    ['board/board.json', 'actions/ledger.json', 'notes/notes.json'].every((f) => !fs.existsSync(path.join(REPO, 'sample-workspace', f))
-      && !fs.existsSync(path.join(appPath('release'), 'Contents', 'Resources', 'sample-workspace', f)))),
+  'the sample workspace ships without board.json or notes/notes.json, and with its actions/ledger.json': verdict(
+    ['board/board.json', 'notes/notes.json'].every((f) => !fs.existsSync(path.join(REPO, 'sample-workspace', f))
+      && !fs.existsSync(path.join(appPath('release'), 'Contents', 'Resources', 'sample-workspace', f)))
+    && fs.existsSync(path.join(REPO, 'sample-workspace', 'actions', 'ledger.json'))
+    && fs.existsSync(path.join(appPath('release'), 'Contents', 'Resources', 'sample-workspace', 'actions', 'ledger.json'))
+    && fs.readFileSync(path.join(appPath('release'), 'Contents', 'Resources', 'sample-workspace', 'actions', 'ledger.json'), 'utf8')
+      === fs.readFileSync(path.join(REPO, 'sample-workspace', 'actions', 'ledger.json'), 'utf8')),
   'only the settings file changed outside the workspace, holding the folder path and nothing else': verdict(
     outsideChanged.length === 1 && outsideChanged[0] === SETTINGS
     && settingsValue && Object.keys(settingsValue).join() === 'workspace' && settingsValue.workspace === WS),
@@ -455,6 +540,8 @@ const report = {
     idCells: ev('id-cells'),
     dateCells: ev('date-cells'),
     todayLayout: ev('today-layout'),
+    todayOnTheSample: { ...briefing, layout: ev('today-layout', 'briefing'), workspaceChanged: briefingChanged, privateTextsLookedFor: privateTexts.length },
+    todayOnTheStarter: { ...starter, workspaceChanged: starterChanged },
     sectionLayout: ev('section-layout'),
     peopleColumns: ev('people-columns'),
     correctionsMoved: one('corrections-moved'),

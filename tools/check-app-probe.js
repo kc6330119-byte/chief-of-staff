@@ -1,7 +1,9 @@
 // Run inside the app window by tools/check-app.mjs (app built with --features probe). It uses the pages the
 // way a person would: clicks, form fields, the switch, a reload. It reports by requesting /__probe/<what>,
 // which the app prints. MODE is replaced by the check script: "session", "restart", "welcome", "missing",
-// "missing-files", "unreadable-files" or "file-menu".
+// "missing-files", "unreadable-files", "file-menu", "briefing" (the sample as shipped, for Today's values) or "starter".
+// PRIVATE_TEXTS is replaced with the starts of the Manager-only notes and the note between meetings in the briefing
+// workspace, none of which may show on Today.
 // ODD_NAME is replaced with the file name of a summary that has spaces, an apostrophe, an ampersand and an
 // accented letter (decision 76). NOTE_TEXT and MEETING_NOTE are the texts of the two notes between meetings it adds
 // (step 8), each with a word found nowhere else.
@@ -12,6 +14,7 @@
   const ODD_NAME = '__ODD_NAME__';
   const NOTE_TEXT = '__NOTE_TEXT__';
   const MEETING_NOTE = '__MEETING_NOTE__';
+  const PRIVATE_TEXTS = '__PRIVATE_TEXTS__';
   const NOTE_WORD = NOTE_TEXT.split(':')[0];
   const MEETING_WORD = MEETING_NOTE.split(':')[0];
   const report = (what, data) => fetch(`/__probe/${what}?${encodeURIComponent(JSON.stringify(data ?? null))}`).catch(() => {});
@@ -87,40 +90,75 @@
     }
     return { width: window.innerWidth, columns: app.querySelectorAll('.column').length, cards, problems: problems.slice(0, 20), problemCount: problems.length };
   };
-  // Today's layout: every row and person sits inside its group, nothing in a row runs outside it, and no chip, title
-  // or ID is cut off.
+  // Today's layout (0.3.0): the page never scrolls sideways; the tiles and every panel sit inside the page, nothing in
+  // one runs outside it, every row sits inside its panel, and no chip, title, count or heading is cut off. Team health
+  // is beside the list, or below it when there isn't room.
   const todayLayout = () => {
     const problems = [];
     const within = (a, b) => a.left >= b.left - 0.5 && a.right <= b.right + 0.5;
-    const name = (el) => el.getAttribute('class') || el.tagName.toLowerCase();
-    const groups = [...app.querySelectorAll('.today-group')];
-    let rows = 0;
-    for (const g of groups) {
-      const gr = g.getBoundingClientRect();
-      for (const row of g.querySelectorAll('.today-row, .today-person')) {
-        rows++;
-        const r = row.getBoundingClientRect();
-        const id = row.dataset.id || row.querySelector('.today-title')?.textContent || '?';
-        if (!within(r, gr)) problems.push(`${id}: the row overflows its group`);
-        for (const el of row.querySelectorAll('*')) {
-          const er = el.getBoundingClientRect();
-          if (er.width > 0 && !within(er, r)) problems.push(`${id}: ${name(el)} overflows its row`);
-        }
-        for (const el of row.querySelectorAll('.chip, .today-title, .today-id')) {
-          if (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1) problems.push(`${id}: ${name(el)} is cut off`);
-        }
+    const name = (el) => el.id || el.getAttribute('class') || el.tagName.toLowerCase();
+    if (document.documentElement.scrollWidth > window.innerWidth + 1) problems.push(`the page is ${document.documentElement.scrollWidth} px wide`);
+    const page = app.getBoundingClientRect();
+    const panels = [...app.querySelectorAll('.today-head, .tile, .brief-panel')];
+    for (const p of panels) {
+      const pr = p.getBoundingClientRect();
+      if (!within(pr, page)) problems.push(`${name(p)} overflows the page`);
+      for (const el of p.querySelectorAll('*')) {
+        const er = el.getBoundingClientRect();
+        if (er.width > 0 && !el.closest('.search-results') && !within(er, pr)) problems.push(`${name(p)}: ${name(el)} overflows it`);
       }
     }
+    let rows = 0;
+    for (const row of app.querySelectorAll('.today-row')) {
+      rows++;
+      const r = row.getBoundingClientRect();
+      if (!within(r, row.closest('.brief-panel').getBoundingClientRect())) problems.push(`${row.dataset.id}: the row overflows its panel`);
+      for (const el of row.querySelectorAll('*')) {
+        const er = el.getBoundingClientRect();
+        if (er.width > 0 && !within(er, r)) problems.push(`${row.dataset.id}: ${name(el)} overflows its row`);
+      }
+    }
+    for (const el of app.querySelectorAll('.chip, .today-title, h1, h2, .tile-label, .tile-count, .tile-sub, .team-name, .team-sub, .reflection-text, .number-value, .number-note')) {
+      if (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1) problems.push(`${name(el.closest('[id]') || el)}: ${name(el)} is cut off`);
+    }
+    // A meeting link's date never breaks: "Sep 15" sits on one line, and is kept there by white-space: nowrap.
+    const dates = [...app.querySelectorAll('.today-row a[href^="#/meetings/"]')].map((a) => a.querySelector('.nowrap'));
+    const wrapped = dates.filter((d) => !d || getComputedStyle(d).whiteSpace !== 'nowrap' || lines(d) > 1).map((d) => d?.textContent ?? 'no date part');
+    const now = document.getElementById('group-now')?.getBoundingClientRect();
+    const team = document.getElementById('group-team')?.getBoundingClientRect();
     return {
       width: window.innerWidth,
-      groups: groups.map((g) => g.querySelector('h2')?.textContent.trim()),
+      meetingDates: { count: dates.length, wrapped },
+      tiles: app.querySelectorAll('.brief-tiles .tile').length,
+      panels: [...app.querySelectorAll('.brief-panel')].map((p) => p.querySelector('h2')?.textContent.trim()),
       rows,
+      teamBeside: !!(now && team) && team.left >= now.right - 0.5 && team.top < now.bottom,
+      teamBelow: !!(now && team) && team.top >= now.bottom - 0.5,
       sub: document.getElementById('today-sub')?.textContent.trim() || null,
       count: document.getElementById('today-count')?.textContent || null,
       problems: problems.slice(0, 20),
       problemCount: problems.length,
     };
   };
+  // Today's whole list, past the first seven.
+  const showAllToday = async () => {
+    const more = document.getElementById('now-more');
+    if (more && /^Show all/.test(more.textContent.trim())) { more.click(); await sleep(150); }
+  };
+  // What Today shows: the tiles as label, count and second line; the list; the filter line; the reflections; the numbers.
+  const tileValues = () => Object.fromEntries([...app.querySelectorAll('.brief-tiles .tile')].map((t) => [t.id.replace('tile-', ''),
+    [t.querySelector('.tile-label').textContent.trim(), t.querySelector('.tile-count').textContent.trim(), t.querySelector('.tile-sub').textContent.trim()]]));
+  const todayRows = () => [...app.querySelectorAll('#group-now .today-row')].map((r) => r.dataset.id);
+  // The window shows only so much: a second screenshot with the lower panels in view.
+  const shotLower = async (name, id) => {
+    document.getElementById(id)?.scrollIntoView({ block: 'start' });
+    await sleep(250);
+    await shot(name);
+    window.scrollTo(0, 0);
+    await sleep(100);
+  };
+  const reflectionDates = () => [...app.querySelectorAll('.reflection-date')].map((a) => [decodeURIComponent(a.getAttribute('href')), a.textContent.trim()]);
+
   // People, a person's page and Agents: the page never scrolls sideways; every row, card and section head sits inside
   // its block, nothing in one runs outside it, and no chip, title or ID is cut off.
   const sectionLayout = (name) => {
@@ -263,6 +301,104 @@
       url: location.href, mode: MODE, page: document.body.dataset.page, firstNav: document.querySelector('.site-nav a')?.dataset.page,
       nav: [...document.querySelectorAll('.site-nav a')].map((a) => a.querySelector('.nav-label')?.textContent.trim()),
     });
+
+    // ---- Today on the sample as shipped (0.3.0): the tiles' values, a tile's filter, Search, the week, the chart, no
+    // private text, at 1440 and 1100 px; the session's own workspace has later check meetings, so its values differ ----
+    if (MODE === 'briefing') {
+      await resize(1440);
+      await go('#/today');
+      const result = { tiles: tileValues(), rows: todayRows(), greeting: document.getElementById('today-greeting').textContent };
+      await report('today-layout', todayLayout());
+      await shot('today');
+      await shotLower('today-lower', 'reflections-went-well');
+      // A filter tile, then a second click.
+      document.getElementById('tile-overdue').click();
+      await sleep(200);
+      result.filtered = { rows: todayRows(), named: document.getElementById('now-filter')?.textContent.replace(/\s+/g, ' ').trim() || null, pressed: document.getElementById('tile-overdue').getAttribute('aria-pressed') };
+      document.getElementById('tile-overdue').click();
+      await sleep(200);
+      result.cleared = { rows: todayRows(), named: !!document.getElementById('now-filter'), pressed: document.getElementById('tile-overdue').getAttribute('aria-pressed') };
+      // The chart.
+      result.chart = { weeks: [...app.querySelectorAll('.chart-week')].map((t) => t.textContent.trim()), points: app.querySelectorAll('.chart-point').length,
+        labelled: [...app.querySelectorAll('.chart-point')].filter((p) => /^(Created|Completed|Overdue), week of .+: \d+$/.test(p.getAttribute('aria-label') || '')).length };
+      // Search, typed as a person would, then Escape.
+      const box = document.getElementById('today-search');
+      box.focus();
+      box.value = 'riley';
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+      await waitFor(() => !document.getElementById('today-search-results').hidden && document.querySelector('.search-count'), 'the search results');
+      const groupText = (id) => [...document.querySelectorAll(`#search-${id} li`)].map((li) => li.textContent.replace(/\s+/g, ' ').trim());
+      result.search = { items: groupText('items'), meetings: groupText('meetings'), people: groupText('people') };
+      await shot('today-search');
+      box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await sleep(100);
+      result.search.cleared = box.value === '' && document.getElementById('today-search-results').hidden;
+      // Everything opened: the whole list and every reflection, in full; then no private text anywhere on the page.
+      const openAll = async () => {
+        await showAllToday();
+        for (const b of [...app.querySelectorAll('[data-brief="more"]')]) if (/more$/.test(b.textContent.trim())) b.click();
+        await sleep(100);
+        for (const b of [...app.querySelectorAll('.reflection-text[aria-expanded="false"]')]) { b.click(); await sleep(20); }
+        await sleep(100);
+      };
+      await openAll();
+      const leaks = () => PRIVATE_TEXTS.filter((t) => document.body.innerText.includes(t));
+      result.privateThisWeek = leaks();
+      // The second lines of Your overdue items and 1:1 coverage.
+      const numberNotes = () => ['your-overdue', 'coverage'].map((id) => document.querySelector(`#number-${id} .number-note`)?.textContent.trim() ?? null);
+      result.thisWeekNotes = numberNotes();
+      // Last week.
+      const week = document.getElementById('today-week');
+      week.value = 'last';
+      week.dispatchEvent(new Event('change', { bubbles: true }));
+      await waitFor(() => /^Last week/.test(document.getElementById('h-numbers')?.textContent || ''), 'last week');
+      await sleep(200);
+      result.lastWeek = { completed: tileValues().completed, heading: document.getElementById('h-numbers').textContent.trim(), reflections: reflectionDates(), notes: numberNotes() };
+      await openAll();
+      result.privateLastWeek = leaks();
+      window.scrollTo(0, 0);
+      // Back to the first seven and nothing opened, for the screenshot.
+      await go('#/board');
+      await go('#/today');
+      document.getElementById('today-week').value = 'last';
+      document.getElementById('today-week').dispatchEvent(new Event('change', { bubbles: true }));
+      await waitFor(() => /^Last week/.test(document.getElementById('h-numbers')?.textContent || ''), 'last week again');
+      await sleep(200);
+      await shot('today-last-week');
+      await shotLower('today-last-week-lower', 'reflections-went-well');
+      await go('#/board');
+      await go('#/today');
+      result.thisWeekReflections = reflectionDates();
+      result.weekAfterReturn = document.getElementById('today-week').value;
+      await resize(1100);
+      await go('#/today');
+      await report('today-layout', todayLayout());
+      await shot('today-1100');
+      await shotLower('today-1100-team', 'group-team');
+      await shotLower('today-1100-lower', 'reflections-went-well');
+      await resize(1440);
+      await report('briefing', result);
+      await report('done');
+      return;
+    }
+    // ---- the starter workspace: Today with no summaries ----
+    if (MODE === 'starter') {
+      await go('#/today');
+      const now = document.getElementById('group-now');
+      await report('starter', {
+        ...pageState('today'),
+        tiles: tileValues(),
+        empty: now?.querySelector('#now-empty')?.textContent.replace(/\s+/g, ' ').trim() || null,
+        help: now?.querySelector('a[href="#/help"]')?.textContent.trim() || null,
+        rows: todayRows().length,
+        points: app.querySelectorAll('.chart-point').length,
+        reflections: [...app.querySelectorAll('.reflections-none')].map((p) => p.textContent.trim()),
+        bad: /undefined|NaN|Something went wrong/.test(document.body.innerText),
+      });
+      await shot('today');
+      await report('done');
+      return;
+    }
 
     if (MODE === 'restart') {
       await go(`#/meetings/${encodeURIComponent(await privateMeeting())}`);
@@ -548,13 +684,14 @@
 
       // ---- Today: Close on the first row I owe; the row stays where it is and one line says what happened ----
       await go('#/today');
-      const firstRow = app.querySelector('#group-i-owe .today-row, #group-open .today-row');
+      const MINE = '#group-now .today-row[data-group="i-owe"], #group-now .today-row[data-group="open"]';
+      const firstRow = app.querySelector(MINE);
       if (firstRow) {
         const todayId = firstRow.dataset.id;
-        const rowsBefore = [...app.querySelectorAll('#group-i-owe .today-row, #group-open .today-row')].map((r) => r.dataset.id);
+        const rowsBefore = [...app.querySelectorAll(MINE)].map((r) => r.dataset.id);
         firstRow.querySelector('[data-act=close]').click();
         await waitFor(() => document.getElementById('today-status').textContent.startsWith('Closed'), 'the Today close');
-        const rowsAfter = [...app.querySelectorAll('#group-i-owe .today-row, #group-open .today-row')].map((r) => r.dataset.id);
+        const rowsAfter = [...app.querySelectorAll(MINE)].map((r) => r.dataset.id);
         const row = app.querySelector(`.today-row[data-id="${CSS.escape(todayId)}"]`);
         await report('today-closed', {
           id: todayId, column: (await boardCard(todayId))?.column,
@@ -636,6 +773,7 @@
       await report('board-layout-notes', boardLayout());
       await shot('board-note-marker');
       await go('#/today');
+      await showAllToday();
       await report('note-marker-today', { id: noteItem, ...marker(app.querySelector(`.today-row[data-id="${CSS.escape(noteItem)}"]`)) });
       await report('today-layout-notes', todayLayout());
       await shot('today-note-marker');

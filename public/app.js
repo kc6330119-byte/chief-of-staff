@@ -31,11 +31,13 @@ const chipHtml = (chip) => (chip ? `<span class="chip chip-${esc(chip.tone)}">${
 // The words a summary gave for an item's due date, or null. "Not set" says nothing was said, so it is not repeated.
 const saidWords = (c) => (c.summaryDue && c.summaryDue !== 'Not set' ? c.summaryDue : null);
 
-// A meeting named for a link: the summary's title up to its date, then the day, e.g. "Kevin & Sam: Bi-Weekly 1:1, Sep 15".
-function meetingLabel(file, date, meetings, asOf) {
+// A meeting named for a link, as HTML: the summary's title up to its date, then the day, e.g. "Kevin & Sam: Bi-Weekly 1:1,
+// Sep 15". The day is kept on one line, so "Sep 15" never breaks.
+function meetingLabelHtml(file, date, meetings, asOf) {
   const m = meetings.find((x) => x.file === file);
   const name = (m?.title || '').split(' | ')[0].trim();
-  return [name, date ? fmtDay(date, asOf) : ''].filter(Boolean).join(', ') || file;
+  const day = date ? `<span class="nowrap">${esc(fmtDay(date, asOf))}</span>` : '';
+  return [esc(name), day].filter(Boolean).join(', ') || esc(file);
 }
 
 // The edit button's icon: a pencil drawn in the text colour.
@@ -114,7 +116,7 @@ function dueLine(it, asOf) {
 }
 
 function rowMeetingLink(file, date, ctx) {
-  return `<a href="#/meetings/${encodeURIComponent(file)}" title="Open the ${esc(fmtDate(date))} meeting">${esc(meetingLabel(file, date, ctx.meetings, ctx.asOf))}</a>`;
+  return `<a href="#/meetings/${encodeURIComponent(file)}" title="Open the ${esc(fmtDate(date))} meeting">${meetingLabelHtml(file, date, ctx.meetings, ctx.asOf)}</a>`;
 }
 
 // The buttons follow the item as it is now. A report asks to be confirmed; a closed row can be reopened. With keep
@@ -520,14 +522,36 @@ function notesPart(o) {
 
 // ---------- Today ----------
 
-// The groups' headings. Which items are in each, and their order, come from the core.
-const TODAY_GROUPS = { 'i-owe': 'I owe', 'owed-to-me': 'Owed to me', open: 'Open items', confirm: 'Needs your confirmation' };
+// Today is a briefing (design/reference-briefing.html): the tiles, what needs me now, team health, the coach's
+// reflections, the week in numbers and six weeks of activity. The core works out every list, count and order; the page
+// only draws them, filters the list by a tile, and searches what the other pages already show.
 const NUMBER_WORDS = ['nothing', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
   'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'];
 const inWords = (n) => NUMBER_WORDS[n] ?? String(n);
 const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const daysFrom = (from, to) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
+const addDays = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+// The Monday of the week that holds a day: weeks run Monday to Sunday, as the core counts them.
+const mondayOf = (iso) => addDays(iso, -((new Date(`${iso}T00:00:00Z`).getUTCDay() + 6) % 7));
+const firstName = (name) => String(name || '').trim().split(/\s+/)[0];
+
+// A week as "Sep 21–27", or "Aug 31–Sep 6" across a month's end.
+function weekRange(monday) {
+  const sunday = addDays(monday, 6);
+  const sameMonth = monday.slice(0, 7) === sunday.slice(0, 7);
+  return `${fmtDate(monday, { month: 'short', day: 'numeric' })}–${fmtDate(sunday, sameMonth ? { day: 'numeric' } : { month: 'short', day: 'numeric' })}`;
+}
+
+// A day with its weekday, "Tue, Sep 29", and the year when it is not the as-of date's.
+const fmtWeekday = (iso, asOf) => fmtDate(iso, { weekday: 'short', month: 'short', day: 'numeric', ...(iso.slice(0, 4) === asOf.slice(0, 4) ? {} : { year: 'numeric' }) });
+
+// "Good morning, Kevin." by this computer's clock, with the first name of the "me" row; "Good morning." without one.
+function greeting(me) {
+  const hour = new Date().getHours();
+  const part = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+  return `Good ${part}${me ? `, ${esc(firstName(me))}` : ''}.`;
+}
 
 // Why it can't be told which items are mine, naming people.md.
 function meProblemLine(p, cant = 'Today can’t tell which items are yours') {
@@ -538,31 +562,138 @@ function meProblemLine(p, cant = 'Today can’t tell which items are yours') {
   return `${why}, so ${cant}.`;
 }
 
+// The list shows this many rows until "Show all".
+const NOW_ROWS = 7;
+
+// The tiles that filter the list: open items whose due date is the as-of date, before it, or from it to Friday.
+const TILE_FILTERS = {
+  'due-today': { label: 'Due today', test: (d, asOf) => d === asOf, none: 'Nothing is due today.' },
+  overdue: { label: 'Overdue', test: (d, asOf) => d < asOf, none: 'Nothing is overdue.' },
+  'due-this-week': { label: 'Due this week', test: (d, asOf, through) => d >= asOf && d <= through, none: 'Nothing is due this week.' },
+};
+
+// One row in "Needs you now": the chip, the title, the owner ("You" for mine), the due date or what the Board says, the
+// meeting it came from and any notes marker; the buttons are Today's own (rowActions).
+function nowRowHtml(it, key, ctx) {
+  const confirm = key === 'confirm';
+  const done = it.column === 'done';
+  const owner = it.mine ? 'You' : it.owner ? esc(it.owner) : 'No owner';
+  const meta = [
+    `<span class="today-owner">${owner}</span>`,
+    confirm ? (done ? (it.closed ? `You closed it on ${fmtDay(it.closed, ctx.asOf)}` : 'Closed on your Board') : 'Still open on your Board') : done ? '' : dueLine(it, ctx.asOf),
+    it.meeting ? rowMeetingLink(it.meeting, it.meetingDate, ctx) : '',
+    noteMarkerHtml(it.notes),
+  ].filter(Boolean).join(' · ');
+  return `
+    <li class="today-row${done ? ' is-done' : ''}" data-id="${esc(it.id)}" data-group="${esc(key)}">
+      <div class="today-chip">${chipHtml(it.chip)}</div>
+      <div class="today-main">
+        <p class="today-title">${esc(it.title)}</p>
+        <p class="today-meta">${meta}</p>
+      </div>
+      <div class="today-actions">${rowActions(it, key, true)}</div>
+      ${ctx.editing?.id === it.id ? dueEditorHtml(it, ctx.editing) : ''}
+    </li>`;
+}
+
+// The weekly activity chart: one line each for created, completed and overdue over six weeks, a marker on every value
+// (a dot, a square and a diamond, so lines that lie on each other can be told apart), each marker named for a screen
+// reader, and the week's three values shown on hover. Drawn as SVG, with no library.
+const SERIES = [['created', 'Created'], ['completed', 'Completed'], ['overdue', 'Overdue']];
+
+function markerSvg(key, x, y) {
+  if (key === 'created') return `<circle cx="${x}" cy="${y}" r="4"></circle>`;
+  if (key === 'completed') return `<rect x="${x - 4.5}" y="${y - 4.5}" width="9" height="9"></rect>`;
+  return `<path d="M${x} ${y - 6.5}L${x + 6.5} ${y}L${x} ${y + 6.5}L${x - 6.5} ${y}Z"></path>`;
+}
+
+function legendHtml() {
+  const swatch = (key) => `<svg class="legend-mark" width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><line class="chart-line line-${key}" x1="1" y1="7" x2="25" y2="7"></line><g class="chart-mark mark-${key}">${markerSvg(key, 13, 7)}</g></svg>`;
+  return `<ul class="chart-legend" aria-label="Legend">${SERIES.map(([key, label]) => `<li>${swatch(key)}${label}</li>`).join('')}</ul>`;
+}
+
+function activityChartHtml(activity, asOf) {
+  const [left, right, top, bottom] = [36, 404, 14, 134];
+  const most = Math.max(0, ...activity.flatMap((w) => SERIES.map(([k]) => w[k])));
+  const scale = Math.max(3, Math.ceil(most / 3) * 3);
+  const y = (v) => +(bottom - (v / scale) * (bottom - top)).toFixed(1);
+  const step = activity.length > 1 ? (right - 14 - (left + 14)) / (activity.length - 1) : 0;
+  const x = (i) => +(left + 14 + i * step).toFixed(1);
+  const day = (iso) => fmtDate(iso, { month: 'short', day: 'numeric' });
+  const grid = [0, 1, 2, 3].map((n) => {
+    const v = (scale / 3) * n;
+    return `<line class="chart-grid" x1="${left}" y1="${y(v)}" x2="${right}" y2="${y(v)}"></line><text class="chart-axis" x="${left - 8}" y="${y(v) + 4}">${v}</text>`;
+  }).join('');
+  const lines = SERIES.map(([key]) => `<polyline class="chart-line line-${key}" points="${activity.map((w, i) => `${x(i)},${y(w[key])}`).join(' ')}"></polyline>`).join('');
+  const points = SERIES.map(([key, label]) => activity.map((w, i) => {
+    const name = `${label}, week of ${day(w.weekStart)}: ${w[key]}`;
+    return `<g class="chart-point chart-mark mark-${key}" role="img" aria-label="${esc(name)}"><title>${esc(name)}</title>${markerSvg(key, x(i), y(w[key]))}</g>`;
+  }).join('')).join('');
+  const weeks = activity.map((w, i) => `<text class="chart-week" x="${x(i)}" y="${bottom + 22}">${day(w.weekStart)}</text>`).join('');
+  // On hover, a week's band shows its three values in a box beside it.
+  const tipW = 104;
+  const hovers = activity.map((w, i) => {
+    const tx = i < activity.length / 2 ? x(i) + 10 : x(i) - 10 - tipW;
+    const rows = SERIES.map(([key, label], n) => `<text class="chart-tip-text" x="${tx + 10}" y="${top + 34 + n * 16}"><tspan class="tip-${key}">■</tspan> ${label} ${w[key]}</text>`).join('');
+    const [b0, b1] = step ? [Math.max(left, x(i) - step / 2), Math.min(right, x(i) + step / 2)] : [left, right];
+    return `<g class="chart-hover" aria-hidden="true">
+      <rect class="chart-band" x="${b0}" y="${top - 6}" width="${b1 - b0}" height="${bottom - top + 12}"></rect>
+      <g class="chart-tip"><rect class="chart-tip-box" x="${tx}" y="${top}" width="${tipW}" height="70" rx="6"></rect><text class="chart-tip-head" x="${tx + 10}" y="${top + 17}">Week of ${day(w.weekStart)}</text>${rows}</g>
+    </g>`;
+  }).join('');
+  const span = activity.length ? `${day(activity[0].weekStart)} to ${day(activity[activity.length - 1].weekStart)}` : '';
+  return `
+    <svg class="activity-chart" id="activity-chart" viewBox="0 0 420 166" role="group" aria-label="Created, completed and overdue items per week, ${esc(span)}">
+      ${grid}${lines}${points}${weeks}${hovers}
+    </svg>`;
+}
+
 async function renderToday() {
+  // The week the briefing counts: this week on every visit, never saved.
+  let week = 'this';
   let view = await api('/api/today');
-  const hasReload = view.status !== 'no-summaries';
   app.innerHTML = `
     <header class="page-head today-head">
-      <div>
-        <h1>Today</h1>
+      <div class="today-hello">
+        <p class="today-date" id="today-date"></p>
+        <h1 id="today-greeting"></h1>
         <p class="page-sub" id="today-sub"></p>
         <p class="board-status" id="today-status" role="status" aria-live="polite"></p>
       </div>
-      ${hasReload ? '<button type="button" class="btn" id="today-reload">Reload</button>' : ''}
+      <div class="today-tools">
+        <div class="today-search" id="today-search-box">
+          <label class="today-field" for="today-search">Search</label>
+          <input type="search" id="today-search" placeholder="Actions, meetings, people" autocomplete="off" spellcheck="false" aria-controls="today-search-results">
+          <div class="search-results" id="today-search-results" hidden></div>
+        </div>
+        <div class="today-week" id="today-week-box">
+          <label class="today-field" for="today-week">Week</label>
+          <select id="today-week"></select>
+        </div>
+        <button type="button" class="btn today-reload" id="today-reload">Reload</button>
+      </div>
     </header>
     <div class="today" id="today-body"></div>`;
 
   const body = document.getElementById('today-body');
   const statusEl = document.getElementById('today-status');
+  const searchEl = document.getElementById('today-search');
+  const resultsEl = document.getElementById('today-search-results');
+  const weekEl = document.getElementById('today-week');
   const setStatus = (msg, isError = false) => {
     statusEl.textContent = msg;
     statusEl.classList.toggle('is-error', isError);
   };
-  // A row I act on stays where it was, showing the item as it is now, until Reload: its group, its place, the item.
-  // Keep open and Keep closed are the exception: their row goes away.
+  // A row I act on stays where it was, showing the item as it is now, until Reload: its group, its place, the item,
+  // and the item as it was (so a tile's filter keeps it). Keep open and Keep closed are the exception: their row goes.
   const lingering = new Map();
   // The IDs in each group as last drawn, for a row's place.
   let drawn = {};
+  // The tile filtering the list, whether the whole list is shown, and which reflections are opened or shown in full.
+  let filter = null;
+  let showAll = false;
+  const opened = new Set();
+  const moreShown = new Set();
 
   const groupItems = (key) => {
     const list = (view.groups.find((g) => g.key === key)?.items || []).filter((it) => !lingering.has(it.id));
@@ -573,36 +704,223 @@ async function renderToday() {
   const itemById = (id) => lingering.get(id)?.item ?? view.groups.flatMap((g) => g.items).find((it) => it.id === id);
   const groupOf = (id) => lingering.get(id)?.group ?? Object.keys(drawn).find((k) => drawn[k].includes(id));
 
-  function groupHtml(key, line, note, rows) {
+  // Every item in Today's groups, in Today's order, each with its group; then the tile's filter. An item I acted on is
+  // filtered as it was before.
+  function nowItems() {
+    drawn = {};
+    const all = view.groups.flatMap((g) => {
+      const items = groupItems(g.key);
+      drawn[g.key] = items.map((it) => it.id);
+      return items.map((it) => ({ it, key: g.key }));
+    });
+    if (!filter) return { all, list: all };
+    const f = TILE_FILTERS[filter];
+    const through = view.briefing.tiles.dueThisWeek.through;
+    const keep = (x) => {
+      const it = lingering.get(x.it.id)?.before ?? x.it;
+      return it.column !== 'done' && it.dueDate && f.test(it.dueDate, view.asOf, through);
+    };
+    return { all, list: all.filter(keep) };
+  }
+
+  // ----- the header -----
+
+  function weekOptions() {
+    const monday = mondayOf(view.asOf);
+    weekEl.innerHTML = [['this', 'This week', monday], ['last', 'Last week', addDays(monday, -7)]]
+      .map(([v, label, m]) => `<option value="${v}"${v === week ? ' selected' : ''}>${label} (${weekRange(m)})</option>`).join('');
+    weekEl.value = week;
+  }
+
+  // One sentence with the three counts, as Today has always said them.
+  function subHtml() {
+    if (view.status !== 'ok') return '';
+    const c = view.counts;
+    const counts = view.meProblem
+      ? `${c.open ? `${inWords(c.open)} open item${c.open === 1 ? '' : 's'}` : 'no open items'}, ${inWords(c.confirm)} to confirm`
+      : `${inWords(c.iOwe)} for you, ${inWords(c.owedToMe)} owed to you, ${inWords(c.confirm)} to confirm`;
+    return `${capitalize(counts)}.`;
+  }
+
+  function drawHead() {
+    const date = fmtDate(view.asOf, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+    document.getElementById('today-date').textContent = `${date}${view.asOfIsNewestMeeting ? ' · the date of the newest meeting' : ''}`;
+    document.getElementById('today-greeting').innerHTML = greeting(view.me);
+    document.getElementById('today-sub').innerHTML = subHtml();
+    // Search and the week need the briefing; without it (a ledger that can't be read) only Reload stays.
+    const briefed = Boolean(view.briefing);
+    document.getElementById('today-search-box').hidden = !briefed;
+    document.getElementById('today-week-box').hidden = !briefed;
+    if (briefed) weekOptions();
+  }
+
+  // ----- the tiles -----
+
+  function tilesHtml(b) {
+    const t = b.tiles;
+    const asOf = view.asOf;
+    const inner = (label, count, sub) => `<span class="tile-label">${label}</span><span class="tile-count">${count}</span><span class="tile-sub">${sub}</span>`;
+    const filterTile = (key, count, sub, tone) => `
+      <button type="button" class="tile${tone ? ` tile-${tone}` : ''}${filter === key ? ' is-on' : ''}" id="tile-${key}" data-brief="filter" data-filter="${key}" aria-pressed="${filter === key}">
+        ${inner(TILE_FILTERS[key].label, count, sub)}
+      </button>`;
+    const linkTile = (id, href, label, count, sub, tone) => `<a class="tile${tone ? ` tile-${tone}` : ''}" id="tile-${id}" href="${href}">${inner(label, count, sub)}</a>`;
+    const due = t.dueThisWeek;
+    const next = due.next ? `Next: ${due.next.count} due ${fmtWeekday(due.next.date, asOf)}` : 'No later due dates';
+    const other = week === 'this' ? 'last week' : 'this week';
+    const alerts = t.teamAlerts;
     return `
-      <section class="today-group" id="group-${key}" aria-labelledby="h-${key}">
-        <div class="today-group-head">
-          <h2 id="h-${key}">${key === 'people' ? 'People' : TODAY_GROUPS[key]}</h2>
-          ${line ? `<span class="today-group-sub">${line}</span>` : ''}
-        </div>
-        ${note ? `<p class="today-note">${note}</p>` : ''}
-        ${rows ? `<ol class="today-rows">${rows}</ol>` : ''}
+      <section class="brief-tiles" aria-label="Counts">
+        ${filterTile('due-today', t.dueToday, t.dueToday ? `Due ${fmtWeekday(asOf, asOf)}` : 'Nothing due today')}
+        ${filterTile('overdue', t.overdue.count, t.overdue.count ? `${t.overdue.overThirtyDays} over 30 days` : 'Nothing past due', t.overdue.count ? 'late' : '')}
+        ${filterTile('due-this-week', due.count, due.count ? `Through ${fmtWeekday(due.through, asOf)}` : next)}
+        ${linkTile('completed', '#/board', 'Completed', t.completed.count, `${week === 'this' ? 'This week' : 'Last week'} · ${t.completed.otherWeek} ${other}`, t.completed.count ? 'good' : '')}
+        ${linkTile('team-alerts', '#/people', 'Team alerts', alerts ? alerts.count : '—',
+          !alerts ? 'Needs a “me” row in <code>people.md</code>' : alerts.count ? esc(alerts.names.map(firstName).join(', ')) : 'No one flagged', alerts?.count ? 'late' : '')}
       </section>`;
   }
 
-  function groupLine(key, n) {
-    if (key === 'i-owe') return n ? `${plural(n, 'item', 'items')} where you are the owner` : 'Nothing of yours is past due, due this week or open more than 30 days.';
-    if (key === 'owed-to-me') return n ? `${plural(n, 'item', 'items')} where someone else is the owner` : 'Nothing owed to you is past due, due this week or open more than 30 days.';
-    if (key === 'open') return n ? `${plural(n, 'item', 'items')} past due, due this week or open more than 30 days` : 'Nothing is past due, due this week or open more than 30 days.';
-    return n ? `${plural(n, 'item', 'items')} where a later meeting disagrees with your Board` : 'Nothing to confirm.';
+  // ----- needs you now -----
+
+  function nowHtml() {
+    const head = (sub, more) => `
+      <div class="today-group-head now-head">
+        <div class="now-title"><h2 id="h-now">Needs you now</h2>${sub ? `<span class="today-group-sub" id="now-sub">${sub}</span>` : ''}</div>
+        ${more}
+      </div>`;
+    if (view.status === 'no-summaries') {
+      return `
+        <section class="brief-panel now" id="group-now" aria-labelledby="h-now">
+          ${head('', '')}
+          <p class="now-empty" id="now-empty">Nothing yet: there are no meeting summaries. Save a summary in <code>meeting-notes/</code> and what needs you shows up here. <a href="#/help">Help</a> shows how to start.</p>
+        </section>`;
+    }
+    const { all, list } = nowItems();
+    const shown = showAll ? list : list.slice(0, NOW_ROWS);
+    const ctx = { asOf: view.asOf, meetings: view.meetings, editing: rows.editing };
+    const more = list.length <= NOW_ROWS ? ''
+      : `<button type="button" class="link-btn" id="now-more" data-brief="${showAll ? 'show-fewer' : 'show-all'}">${showAll ? `Show the first ${NOW_ROWS}` : `Show all ${list.length}`}</button>`;
+    const sub = list.length ? `Showing ${shown.length} of ${list.length}, in Today’s order` : '';
+    const named = filter ? `
+      <p class="now-filter" id="now-filter">Filtered to <strong>${TILE_FILTERS[filter].label}</strong>: ${plural(list.length, 'item', 'items')} of ${all.length}.
+        <button type="button" class="link-btn" data-brief="clear-filter">Show everything</button></p>` : '';
+    const note = view.meProblem ? `<p class="today-note now-note">${meProblemLine(view.meProblem)}</p>` : '';
+    const empty = !list.length ? `<p class="now-empty" id="now-empty">${filter ? TILE_FILTERS[filter].none : 'Nothing is past due, due within a week, open more than 30 days or waiting for your confirmation.'}</p>` : '';
+    return `
+      <section class="brief-panel now" id="group-now" aria-labelledby="h-now">
+        ${head(sub, more)}
+        ${named}${note}${empty}
+        ${shown.length ? `<ol class="today-rows">${shown.map(({ it, key }) => nowRowHtml(it, key, ctx)).join('')}</ol>` : ''}
+      </section>`;
   }
 
-  function peopleHtml() {
-    if (view.meProblem) return groupHtml('people', '', meProblemLine(view.meProblem), '');
-    const { reports, flagCount } = view.people;
-    const line = !reports.length ? 'No one in <code>people.md</code> is marked “report”.'
-      : flagCount ? plural(flagCount, 'flag', 'flags')
-      : 'No flags: every report has met with you in the last 30 days, and none has a busy week.';
-    return groupHtml('people', line, '', reports.map((p) => personRowHtml(p, view.asOf)).join(''));
+  // ----- team health -----
+
+  function teamHtml(b) {
+    const h = b.teamHealth;
+    const reports = view.people?.reports?.length;
+    const head = `
+      <div class="today-group-head team-head">
+        <h2 id="h-team">Team health</h2>
+        ${typeof reports === 'number' ? `<span class="today-group-sub">${plural(reports, 'report', 'reports')}</span>` : ''}
+      </div>`;
+    const foot = '<div class="team-foot"><a class="btn team-view" href="#/people">View People</a></div>';
+    // Without one "me" in people.md the core can't tell whose an item is, so there is no team health to show.
+    if (view.meProblem || h.heavyLoads === null) {
+      const why = view.meProblem ? meProblemLine(view.meProblem, 'Team health can’t be worked out')
+        : 'Team health needs one row marked “me” in <code>people.md</code>.';
+      return `<section class="brief-panel team" id="group-team" aria-labelledby="h-team">${head}<p class="today-note team-note">${why}</p>${foot}</section>`;
+    }
+    const row = (id, count, name, sub, tone, item) => `
+      <a class="team-row" id="team-${id}" href="${item ? '#/today' : '#/people'}"${item ? ` data-brief="goto-item" data-item="${esc(item)}"` : ''}>
+        <span class="team-count${count ? ` team-count-${tone}` : ''}">${count}</span>
+        <span class="team-text"><span class="team-name">${name}</span><span class="team-sub">${sub}</span></span>
+      </a>`;
+    const owed = h.overdueOwedToYou;
+    const first = owed?.items[0];
+    const missed = h.missedOneOnOne;
+    const gap = missed?.longestGap;
+    const confirmFirst = view.groups.find((g) => g.key === 'confirm')?.items[0]?.id;
+    return `
+      <section class="brief-panel team" id="group-team" aria-labelledby="h-team">
+        ${head}
+        ${row('heavy', h.heavyLoads.count, 'Heavy loads', h.heavyLoads.count ? esc(h.heavyLoads.names.map(firstName).join(', ')) : '3+ open items past due or due within a week', 'late')}
+        ${row('owed', owed.count, 'Overdue, owed to you', first ? `${esc(first.owner || 'No owner')}, ${plural(first.daysPastDue, 'day', 'days')}${owed.count > 1 ? `, and ${owed.count - 1} more` : ''}` : 'Nothing owed to you is past due', 'late', first?.id)}
+        ${row('missed', missed.count, 'No 1:1 in 30+ days', missed.count ? esc(missed.names.map(firstName).join(', '))
+          : gap ? `Longest gap: ${esc(firstName(gap.name))}, ${plural(gap.days, 'day', 'days')}` : 'No 1:1 with a report yet', 'late')}
+        ${row('input', h.awaitingInput, 'Awaiting your input', h.awaitingInput === 1 ? 'A summary and your Board disagree'
+          : h.awaitingInput ? `Summaries and your Board disagree on ${h.awaitingInput} items` : 'Nothing to confirm', 'soon', h.awaitingInput ? confirmFirst : null)}
+        ${foot}
+      </section>`;
+  }
+
+  // ----- the coach's reflections -----
+
+  function reflectionsHtml(b) {
+    const whose = week === 'this' ? 'this week’s' : 'last week’s';
+    const block = (kind, heading) => {
+      const list = b.reflections.filter((r) => r.kind === kind);
+      const shown = moreShown.has(kind) ? list : list.slice(0, 3);
+      const rest = list.length - 3;
+      const items = shown.map((r, i) => {
+        const key = `${kind}-${i}`;
+        const open = opened.has(key);
+        return `
+          <li class="reflection">
+            <span class="reflection-dot dot-${kind}" aria-hidden="true"></span>
+            <button type="button" class="reflection-text" data-brief="reflection" data-key="${key}" aria-expanded="${open}">${esc(open ? r.text : r.headline)}</button>
+            <a class="reflection-date" href="#/meetings/${encodeURIComponent(r.file)}" aria-label="Open the ${esc(fmtDate(r.date))} meeting">${fmtDay(r.date, view.asOf)}</a>
+          </li>`;
+      }).join('');
+      return `
+        <section class="brief-panel reflections" id="reflections-${kind}" aria-labelledby="h-${kind}">
+          <div class="reflections-head">
+            <h2 id="h-${kind}">${heading}</h2>
+            <p class="today-group-sub">The Coach’s words, from ${whose} summaries</p>
+          </div>
+          ${list.length ? `<ul class="reflection-list">${items}</ul>` : `<p class="reflections-none">No coaching notes in ${whose} summaries.</p>`}
+          ${rest > 0 ? `<div class="reflections-more"><button type="button" class="link-btn" data-brief="more" data-kind="${kind}">${moreShown.has(kind) ? 'Show fewer' : `${rest} more`}</button></div>` : ''}
+        </section>`;
+    };
+    return `<div class="brief-pair">${block('went-well', 'What went well')}${block('could-do-better', 'What I could do better')}</div>`;
+  }
+
+  // ----- the week in numbers, and weekly activity -----
+
+  function numbersHtml(b) {
+    const n = b.numbers;
+    const range = weekRange(b.weekStart);
+    const counted = b.countedTo < b.weekEnd ? `${range}, counted to ${fmtDay(b.countedTo, view.asOf)}` : range;
+    const other = week === 'this' ? 'last week' : 'this week';
+    // Your overdue items and coverage are counted to the as-of date in either week; with Last week picked, they say so.
+    const asOfNote = (note) => (week === 'this' ? note : `as of ${fmtDay(view.asOf, view.asOf)}`);
+    const stat = (id, label, value, note, tone) => `
+      <div class="number" id="number-${id}"><dt>${label}</dt><dd class="number-value${tone && value ? ` number-${tone}` : ''}">${value ?? '—'}</dd><dd class="number-note">${note}</dd></div>`;
+    return `
+      <section class="brief-panel numbers" id="group-numbers" aria-labelledby="h-numbers">
+        <h2 id="h-numbers">${week === 'this' ? 'This week' : 'Last week'} in numbers</h2>
+        <p class="today-group-sub" id="numbers-sub">${counted}</p>
+        <dl class="number-grid">
+          ${stat('closed', 'Closed', n.closed, `${b.tiles.completed.otherWeek} ${other}`)}
+          ${stat('on-time', 'Closed on time', n.closedOnTime, 'of those with a due date')}
+          ${stat('your-overdue', 'Your overdue items', n.yourOverdue, n.yourOverdue === null ? 'needs a “me” row in <code>people.md</code>' : asOfNote('items you own, past due'), 'late')}
+          ${stat('coverage', '1:1 coverage', n.coverage, n.coverage === null ? 'needs a “me” row in <code>people.md</code>' : asOfNote('reports met in 14 days'))}
+        </dl>
+      </section>`;
+  }
+
+  function activityHtml(b) {
+    return `
+      <section class="brief-panel activity" id="group-activity" aria-labelledby="h-activity">
+        <div class="activity-head"><h2 id="h-activity">Weekly activity</h2>${legendHtml()}</div>
+        ${activityChartHtml(b.activity, view.asOf)}
+        <p class="chart-note">Weeks starting Monday. Overdue = open and past due at the week’s end.</p>
+      </section>`;
   }
 
   function footHtml() {
     const f = view.foot;
+    if (!f) return '';
     const read = f.couldNotRead
       ? `${plural(f.couldNotRead, 'thing', 'things')} could not be read: <a href="#/meetings">see Meetings</a>.`
       : 'Could not read: nothing.';
@@ -612,57 +930,42 @@ async function renderToday() {
     return `<p class="today-foot">${read} ${agents}</p>`;
   }
 
-  // The as-of date with its weekday, and one sentence with the three counts.
-  function subHtml() {
-    if (view.status !== 'ok') return '';
-    const date = fmtDate(view.asOf, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
-    const c = view.counts;
-    const counts = view.meProblem
-      ? `${c.open ? `${inWords(c.open)} open item${c.open === 1 ? '' : 's'}` : 'no open items'}, ${inWords(c.confirm)} to confirm`
-      : `${inWords(c.iOwe)} for you, ${inWords(c.owedToMe)} owed to you, ${inWords(c.confirm)} to confirm`;
-    return `${date}${view.asOfIsNewestMeeting ? ', the date of the newest meeting' : ''}. ${capitalize(counts)}.`;
-  }
-
   function bodyHtml() {
-    if (view.status === 'no-summaries') {
-      return '<p class="today-start">No meeting summaries yet. Save a summary in <code>meeting-notes/</code> and it shows up here.</p>';
-    }
+    // A ledger that can't be read: its notice and the foot, and no actions.
     if (view.status === 'ledger-unreadable') return `<div class="notice notice-warn">${esc(view.ledgerError)}</div>${footHtml()}`;
-    drawn = {};
-    const ctx = { asOf: view.asOf, meetings: view.meetings, editing: rows.editing };
-    const groups = view.groups.map((g) => {
-      const items = groupItems(g.key);
-      drawn[g.key] = items.map((it) => it.id);
-      const n = g.key === 'open' ? view.counts.open : g.key === 'confirm' ? view.counts.confirm : g.key === 'i-owe' ? view.counts.iOwe : view.counts.owedToMe;
-      const note = g.key === 'open' ? meProblemLine(view.meProblem) : '';
-      return groupHtml(g.key, groupLine(g.key, n), note, items.map((it) => itemRowHtml(it, g.key, ctx)).join(''));
-    });
-    return groups.join('') + peopleHtml() + footHtml();
+    const b = view.briefing;
+    return `
+      ${tilesHtml(b)}
+      <div class="brief-main">${nowHtml()}${teamHtml(b)}</div>
+      ${reflectionsHtml(b)}
+      <div class="brief-pair">${numbersHtml(b)}${activityHtml(b)}</div>
+      ${footHtml()}`;
   }
 
   function draw() {
     showTodayCount(view);
-    document.getElementById('today-sub').innerHTML = subHtml();
+    drawHead();
     body.innerHTML = bodyHtml();
     // What was typed in the date field survives a redraw.
     if (rows.editing) document.getElementById('today-due').value = rows.editing.due;
   }
 
-  // Every action answers with the whole of Today and the item as it is now.
+  // Every action answers with the whole of Today, with the briefing for the week picked, and the item as it is now.
   async function act(id, action, payload = {}) {
     const before = itemById(id);
     const key = groupOf(id);
     const index = Math.max(0, drawn[key]?.indexOf(id) ?? 0);
     let res;
     try {
-      res = await api(`/api/today/items/${encodeURIComponent(id)}/${action}`, { method: 'POST', body: payload });
+      res = await api(`/api/today/items/${encodeURIComponent(id)}/${action}?week=${week}`, { method: 'POST', body: payload });
     } catch (err) {
       if (rows.editing?.id === id) { rows.editing.error = err.message; draw(); } else setStatus(err.message, true);
       return;
     }
     view = res;
+    search.reset();
     if (action === 'keep' || !res.item) lingering.delete(id);
-    else lingering.set(id, { group: key, index, item: res.item });
+    else lingering.set(id, { group: key, index, item: res.item, before: lingering.get(id)?.before ?? before });
     rows.editing = null;
     draw();
     refreshOpenCount();
@@ -673,24 +976,184 @@ async function renderToday() {
   const rows = { editing: null, itemById, act, draw };
   const { focusRow } = wireItemRows(body, rows);
 
-  // Reload reads everything again; the rows I acted on go to where they now belong.
-  if (hasReload) {
-    document.getElementById('today-reload').addEventListener('click', async () => {
-      try {
-        view = await api('/api/today');
-      } catch (err) {
-        setStatus(err.message, true);
-        return;
-      }
-      lingering.clear();
-      rows.editing = null;
-      setStatus('');
-      draw();
-      refreshOpenCount();
-    });
+  // An item named in Team health: its row in the list, shown even if the filter or the first seven would hide it.
+  function goToItem(id) {
+    const { list } = nowItems();
+    if (!list.some((x) => x.it.id === id)) filter = null;
+    const at = nowItems().list.findIndex((x) => x.it.id === id);
+    if (at < 0) { location.hash = '#/board'; return; }
+    if (at >= NOW_ROWS) showAll = true;
+    draw();
+    const row = body.querySelector(`.today-row[data-id="${CSS.escape(id)}"]`);
+    row?.scrollIntoView({ block: 'center' });
+    row?.querySelector('button')?.focus();
   }
 
+  // The tiles, the list's "Show all", the reflections and Team health's item links.
+  body.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-brief]');
+    if (!el) return;
+    const what = el.dataset.brief;
+    if (what === 'filter') {
+      filter = filter === el.dataset.filter ? null : el.dataset.filter;
+      showAll = false;
+      draw();
+      document.getElementById(`tile-${el.dataset.filter}`)?.focus();
+    }
+    if (what === 'clear-filter') { filter = null; draw(); }
+    if (what === 'show-all' || what === 'show-fewer') {
+      showAll = what === 'show-all';
+      draw();
+      document.getElementById('now-more')?.focus();
+    }
+    if (what === 'reflection') {
+      const key = el.dataset.key;
+      if (opened.has(key)) opened.delete(key); else opened.add(key);
+      draw();
+      body.querySelector(`[data-key="${CSS.escape(key)}"]`)?.focus();
+    }
+    if (what === 'more') {
+      const kind = el.dataset.kind;
+      if (moreShown.has(kind)) moreShown.delete(kind); else moreShown.add(kind);
+      draw();
+      body.querySelector(`[data-brief="more"][data-kind="${CSS.escape(kind)}"]`)?.focus();
+    }
+    if (what === 'goto-item') {
+      e.preventDefault();
+      goToItem(el.dataset.item);
+    }
+  });
+
+  // The week changes Completed's second line, the reflections and the numbers; the rest is as of the as-of date.
+  weekEl.addEventListener('change', async (e) => {
+    const asked = e.target.value;
+    let res;
+    try {
+      res = await api(`/api/today?week=${asked}`);
+    } catch (err) {
+      weekEl.value = week;
+      setStatus(err.message, true);
+      return;
+    }
+    week = asked;
+    view.briefing = res.briefing;
+    opened.clear();
+    moreShown.clear();
+    draw();
+  });
+
+  const search = todaySearch(searchEl, resultsEl, () => view.asOf);
+
+  // Reload reads everything again; the rows I acted on go to where they now belong.
+  document.getElementById('today-reload').addEventListener('click', async () => {
+    try {
+      view = await api(`/api/today?week=${week}`);
+    } catch (err) {
+      setStatus(err.message, true);
+      return;
+    }
+    lingering.clear();
+    rows.editing = null;
+    search.reset();
+    setStatus('');
+    draw();
+    refreshOpenCount();
+  });
+
   draw();
+}
+
+// Search on Today: as you type, ignoring case, over the action items (ID, title, owner), my own cards (title, owner),
+// the meetings (title, date, attendees) and the people (name, role, Also called), as the Board and People pages already
+// read them. Only those fields are kept, so a card's note and a note's text are never searched; nothing is written and
+// nothing leaves this computer. Escape clears it.
+function todaySearch(input, out, asOf) {
+  let data = null;
+  let asked = 0;
+
+  async function load() {
+    const [board, people] = await Promise.all([api('/api/board'), api('/api/people').catch(() => null)]);
+    return {
+      items: board.cards.filter((c) => !c.suggested).map((c) => ({
+        id: c.id, own: c.own, title: c.title, owner: c.owner || '', meeting: c.meeting, closed: c.column === 'done', chip: c.chip?.text || '',
+      })),
+      meetings: board.meetings.map((m) => ({ file: m.file, date: m.date, title: (m.title || '').split(' | ')[0].trim(), people: m.people || [] })),
+      people: (people?.people || []).map((p) => ({ name: p.name, role: p.role || '', alsoCalled: p.alsoCalled || [] })),
+    };
+  }
+
+  const has = (q, fields) => fields.some((f) => String(f ?? '').toLowerCase().includes(q));
+  const PER_GROUP = 8;
+
+  function groupHtml(id, heading, list, row) {
+    if (!list.length) return '';
+    const more = list.length > PER_GROUP ? `<p class="search-more">and ${list.length - PER_GROUP} more</p>` : '';
+    return `
+      <section class="search-group" id="search-${id}" aria-labelledby="search-${id}-h">
+        <h3 id="search-${id}-h">${heading} <span class="search-n">${list.length}</span></h3>
+        <ul>${list.slice(0, PER_GROUP).map(row).join('')}</ul>${more}
+      </section>`;
+  }
+
+  // q is the search as typed; it matches ignoring case.
+  function draw(typed) {
+    const q = typed.toLowerCase();
+    const d = data;
+    const items = d.items.filter((c) => has(q, [c.own ? '' : c.id, c.title, c.owner]));
+    const meetings = d.meetings.filter((m) => has(q, [m.title, m.date, m.date && fmtDate(m.date), ...m.people]));
+    const people = d.people.filter((p) => has(q, [p.name, p.role, ...p.alsoCalled]));
+    const n = items.length + meetings.length + people.length;
+    const day = (iso) => (iso ? fmtDay(iso, asOf()) : '');
+    out.innerHTML = `
+      <p class="search-count" role="status">${n ? `${plural(n, 'result', 'results')} for “${esc(typed)}”` : `Nothing matches “${esc(typed)}”.`}</p>
+      ${groupHtml('items', 'Action items', items, (c) => `
+        <li><a href="${c.meeting && !c.own ? `#/meetings/${encodeURIComponent(c.meeting)}` : '#/board'}">
+          <span class="search-main">${esc(c.title)}</span>
+          <span class="search-sub">${[c.own ? 'Your card' : esc(c.id), esc(c.owner || 'No owner'), esc(c.closed ? 'Closed' : c.chip)].filter(Boolean).join(' · ')}</span>
+        </a></li>`)}
+      ${groupHtml('meetings', 'Meetings', meetings, (m) => `
+        <li><a href="#/meetings/${encodeURIComponent(m.file)}">
+          <span class="search-main">${esc(m.title || m.file)}</span>
+          <span class="search-sub">${[day(m.date), esc(m.people.join(', '))].filter(Boolean).join(' · ')}</span>
+        </a></li>`)}
+      ${groupHtml('people', 'People', people, (p) => `
+        <li><a href="${personHref(p.name)}">
+          <span class="search-main">${esc(p.name)}</span>
+          <span class="search-sub">${esc(p.role)}</span>
+        </a></li>`)}`;
+    out.hidden = false;
+  }
+
+  function clear() {
+    asked++;
+    out.hidden = true;
+    out.innerHTML = '';
+  }
+
+  async function run() {
+    const q = input.value.trim();
+    if (!q) { clear(); return; }
+    const mine = ++asked;
+    if (!data) {
+      try {
+        data = await load();
+      } catch (err) {
+        if (mine !== asked) return;
+        out.innerHTML = `<p class="search-count">Search can’t read the Board: ${esc(err.message)}</p>`;
+        out.hidden = false;
+        return;
+      }
+    }
+    // Only the latest search is drawn.
+    if (mine === asked) draw(q);
+  }
+
+  input.addEventListener('input', run);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); input.value = ''; clear(); }
+  });
+  // After an action or Reload, the next search reads again.
+  return { reset: () => { data = null; if (input.value.trim()) run(); } };
 }
 
 // ---------- Meetings ----------
@@ -727,7 +1190,7 @@ async function renderMeetings(params = {}) {
         <div class="filters">
           <label class="check">
             <input type="checkbox" id="hide-closed" ${state.hideClosed ? 'checked' : ''}>
-            Hide done and dropped
+            Hide closed
           </label>
           <label class="check">
             <input type="checkbox" id="hide-suggested" ${state.hideSuggested ? 'checked' : ''}>
@@ -799,14 +1262,16 @@ async function renderMeetings(params = {}) {
 
   // An earlier-items row with no ID is background, not an action item: its "From" is shown as written.
   const background = (r) => r.kind === 'earlier item' && !r.id;
+  // Closed: its latest summary says Done or Dropped, or it is in Done on the Board.
+  const closed = (r) => r.state !== 'open' || r.column === 'done';
   const renderRows = () => {
     const rows = data.tracked.filter((r) =>
-      !(state.hideClosed && r.state !== 'open') &&
+      !(state.hideClosed && closed(r)) &&
       !(state.hideSuggested && r.suggested) &&
       !(state.owner && r.owner !== state.owner));
     document.getElementById('tracked-count').textContent = `Showing ${rows.length} of ${data.tracked.length}`;
     document.getElementById('tracked-body').innerHTML = rows.map((r) => `
-      <tr class="${r.state !== 'open' ? 'is-closed' : ''}">
+      <tr class="${closed(r) ? 'is-closed' : ''}">
         <td class="id">${r.id ? esc(r.id) : '<span class="muted">no ID</span>'}</td>
         <td class="item">
           <span>${r.textHtml}</span>
@@ -1025,8 +1490,8 @@ async function renderBoard() {
   // "From <meeting>", linking to the card's first meeting.
   function meetingLink(c) {
     if (!c.meeting) return '';
-    const label = meetingLabel(c.meeting, c.meetingDate, view.meetings, view.asOf);
-    return `From <a href="#/meetings/${encodeURIComponent(c.meeting)}" title="Open the ${esc(fmtDate(c.meetingDate))} meeting">${esc(label)}</a>`;
+    const label = meetingLabelHtml(c.meeting, c.meetingDate, view.meetings, view.asOf);
+    return `From <a href="#/meetings/${encodeURIComponent(c.meeting)}" title="Open the ${esc(fmtDate(c.meetingDate))} meeting">${label}</a>`;
   }
 
   const CIRCLE = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle></svg>';

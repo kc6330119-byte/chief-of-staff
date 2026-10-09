@@ -1,6 +1,8 @@
 // The Today page (step 6): the core works out which items count, the groups and their order, the people rows and
 // their flags, and the counts; the page only draws them. Keep open and Keep closed record in the ledger that a
-// report has been seen, and its chip goes away everywhere until a later summary reports it again.
+// report has been seen, and its chip goes away everywhere until a later summary reports it again. Since 0.3.0 the page
+// is a briefing: the groups are one list, "Needs you now", in the same order, and Team health stands in for the People
+// group (test/today-page.test.js checks the rest of the briefing).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -95,7 +97,9 @@ const item = (view, id) => view.groups.flatMap((g) => g.items).find((i) => i.id 
 
 // ---------- the page: rows, buttons and clicks in the stand-in document ----------
 const sectionHtml = (page, key) => page.el('today-body').innerHTML.split(/<section\b/).find((s) => s.includes(`id="group-${key}"`));
-const rowIds = (page, key) => [...(sectionHtml(page, key) || '').matchAll(/<li class="today-row[^"]*" data-id="([^"]+)"/g)].map((m) => m[1]);
+// The rows drawn for a group, in order: each row in "Needs you now" says which of Today's groups it is in.
+const rowIds = (page, key) => [...page.el('today-body').innerHTML.matchAll(/<li class="today-row[^"]*" data-id="([^"]+)" data-group="([^"]+)"/g)]
+  .filter((m) => !key || m[2] === key).map((m) => m[1]);
 const rowHtml = (page, id) => page.el('today-body').innerHTML.split(/<li class="today-row/).slice(1).find((r) => r.includes(`data-id="${id}"`));
 const buttons = (html) => [...html.matchAll(/<button\b[^>]*data-act="([\w-]+)"[^>]*>([^<]*)</g)].map((m) => [m[1], m[2].trim()]);
 async function click(page, id, act) {
@@ -106,6 +110,12 @@ async function click(page, id, act) {
   const button = { dataset: { act }, disabled: false, closest: (sel) => (sel.startsWith('button') ? button : sel === '.today-row' ? row : null) };
   await page.el('today-body').fire('click', { target: button });
 }
+// A click on one of the briefing's own controls (data-brief): a tile, "Show all", a reflection.
+async function clickBrief(page, dataset) {
+  const target = { dataset, closest: (sel) => (sel === '[data-brief]' ? target : null) };
+  await page.el('today-body').fire('click', { target });
+}
+const showAll = (page) => clickBrief(page, { brief: 'show-all' });
 const waitFor = async (f, what) => {
   for (let i = 0; i < 100; i++) { if (f()) return; await new Promise((r) => setTimeout(r, 20)); }
   throw new Error(`timed out waiting for ${what}`);
@@ -225,34 +235,37 @@ describe('the page draws what the core decided', () => {
   before(async () => {
     site = await startSite({ prepare: writeFixture });
     page = await openPage(site, '#/today');
+    await showAll(page);
   });
   after(async () => { await site?.stop(); });
 
-  test('the header: the as-of date with its weekday, that it is the newest meeting\'s, and one sentence with the three counts', () => {
-    const sub = page.el('today-sub').innerHTML;
-    assert.match(sub, /Tuesday, Sep 22, 2026/);
-    assert.match(sub, /newest meeting/);
-    assert.match(sub, /Seven for you, seven owed to you, four to confirm\./);
+  test('the header: the as-of date with its weekday, that it is the newest meeting\'s, the greeting, and one sentence with the three counts', () => {
+    assert.equal(page.el('today-date').textContent, 'Tuesday, Sep 22, 2026 · the date of the newest meeting');
+    assert.match(page.el('today-greeting').innerHTML, /^Good (morning|afternoon|evening), Kevin\.$/);
+    assert.equal(page.el('today-sub').innerHTML, 'Seven for you, seven owed to you, four to confirm.');
     assert.match(page.html(), /<button[^>]*id="today-reload"[^>]*>Reload<\/button>/);
   });
 
-  test('the groups in order, each row in the core\'s order', () => {
-    const body = page.el('today-body').innerHTML;
-    const order = ['I owe', 'Owed to me', 'Needs your confirmation', 'People'].map((h) => body.indexOf(`>${h}</h2>`));
-    assert.ok(order.every((i) => i >= 0), JSON.stringify(order));
-    assert.deepEqual([...order].sort((a, b) => a - b), order);
+  test('Needs you now: the first 7 rows, then "Show all 18"; all of them in the core\'s order, group by group', async () => {
+    await clickBrief(page, { brief: 'show-fewer' });
+    assert.deepEqual(rowIds(page), I_OWE.slice(0, 7));
+    assert.match(sectionHtml(page, 'now'), /Showing 7 of 18, in Today’s order/);
+    assert.match(sectionHtml(page, 'now'), /data-brief="show-all">Show all 18</);
+    await showAll(page);
+    assert.deepEqual(rowIds(page), [...I_OWE, ...OWED, ...CONFIRM]);
     assert.deepEqual(rowIds(page, 'i-owe'), I_OWE);
     assert.deepEqual(rowIds(page, 'owed-to-me'), OWED);
     assert.deepEqual(rowIds(page, 'confirm'), CONFIRM);
+    assert.match(sectionHtml(page, 'now'), /Showing 18 of 18/);
   });
 
-  test('an I owe row: the chip, the title, the ID, the due line, the first meeting; Re-date and Close', () => {
+  test('an I owe row: the chip, the title, "You", the due line, the first meeting; Re-date and Close', () => {
     const row = rowHtml(page, 'A-260922-2');
     assert.match(row, /<span class="chip chip-soon">Due today<\/span>/);
     assert.match(row, />Kevin: due today, with words</);
-    assert.match(row, />A-260922-2</);
+    assert.match(row, /<span class="today-owner">You<\/span>/);
     assert.match(row, /Due Tue, Sep 22, said “This week”/);
-    assert.match(row, new RegExp(`From <a href="#/meetings/${encodeURIComponent(M_DANA)}"[^>]*>Dana &amp; Kevin: 1:1 with Manager, Sep 22</a>`));
+    assert.match(row, new RegExp(`<a href="#/meetings/${encodeURIComponent(M_DANA)}"[^>]*>Dana &amp; Kevin: 1:1 with Manager, <span class="nowrap">Sep 22</span></a>`));
     assert.deepEqual(buttons(row), [['redate', 'Re-date'], ['close', 'Close']]);
   });
 
@@ -270,31 +283,34 @@ describe('the page draws what the core decided', () => {
     assert.deepEqual(buttons(row), [['close', 'Close']]);
   });
 
-  test('a confirmation row shows what the summary said, word for word, with a link to that meeting', () => {
+  test('a confirmation row: the chip says what was reported, the row what the Board says, with the item\'s meeting', () => {
     const reported = rowHtml(page, 'A-260701-4');
-    assert.match(reported, /Sep 15 summary: Done\. Finished on <strong>Sep 12<\/strong>, approved by Dana\./);
-    assert.match(reported, new RegExp(`<a href="#/meetings/${encodeURIComponent(M_RILEY)}"`));
+    assert.match(reported, /<span class="chip chip-soon">Reported done Sep 15<\/span>/);
+    assert.match(reported, /Still open on your Board/);
+    assert.match(reported, new RegExp(`<a href="#/meetings/${encodeURIComponent(M_PRAVEEN)}"`));
     assert.match(reported, />You</);
     assert.deepEqual(buttons(reported), [['keep', 'Keep open'], ['close', 'Close']]);
     const still = rowHtml(page, 'A-260701-5');
-    assert.match(still, /Sep 22 summary: Open\. Still on it\./);
+    assert.match(still, /Still mentioned Sep 22/);
     assert.match(still, /You closed it on Sep 10/);
     assert.deepEqual(buttons(still), [['keep', 'Keep closed'], ['reopen', 'Reopen']]);
     assert.match(rowHtml(page, 'A-260823-5'), /Sam Torres/);
   });
 
-  test('People: last meeting and days ago, Owes you and You owe, flags, and a link to the person\'s page', () => {
-    const people = sectionHtml(page, 'people');
-    assert.match(people, /3 flags/);
-    const sam = people.split('<li class="today-person"').find((p) => p.includes('Sam Torres'));
-    assert.match(sam, /Last meeting Aug 23, 30 days ago/);
-    assert.match(sam, /Owes you 5 · You owe 3/);
-    assert.match(sam, /href="#\/people\/Sam%20Torres"/);
-    const praveen = people.split('<li class="today-person"').find((p) => p.includes('Praveen Iyer'));
-    assert.match(praveen, /<span class="chip chip-late">No 1:1 in 83 days<\/span>/);
-    const alex = people.split('<li class="today-person"').find((p) => p.includes('Alex Kim'));
-    assert.match(alex, /No 1:1 yet/);
-    assert.match(people.split('<li class="today-person"').find((p) => p.includes('Riley Brooks')), /Busy week/);
+  test('Team health: the four rows from the core, the reports counted, each a link to People or to the item', async () => {
+    const team = sectionHtml(page, 'team');
+    const h = (await site.api.today()).briefing.teamHealth;
+    assert.match(team, /3 reports|4 reports/);
+    assert.match(team, new RegExp(`id="team-heavy" href="#/people">\\s*<span class="team-count team-count-late">${h.heavyLoads.count}</span>`));
+    assert.match(team, /Heavy loads<\/span><span class="team-sub">Riley<\/span>/);
+    assert.match(team, /No 1:1 in 30\+ days<\/span><span class="team-sub">Praveen, Alex<\/span>/);
+    const first = h.overdueOwedToYou.items[0];
+    assert.match(team, new RegExp(`id="team-owed" href="#/today" data-brief="goto-item" data-item="${first.id}"`));
+    const more = h.overdueOwedToYou.count > 1 ? `, and ${h.overdueOwedToYou.count - 1} more` : '';
+    assert.match(team, new RegExp(`<span class="team-sub">${first.owner}, ${first.daysPastDue} days?${more}</span>`));
+    assert.match(team, new RegExp(`id="team-input" href="#/today" data-brief="goto-item" data-item="${CONFIRM[0]}"`));
+    assert.match(team, /Summaries and your Board disagree on 4 items/);
+    assert.match(team, /<a class="btn team-view" href="#\/people">View People<\/a>/);
   });
 
   test('the foot: that nothing failed; agents with a review due, with a link to Agents', () => {
@@ -316,6 +332,7 @@ describe('the page draws what the core decided', () => {
     fs.writeFileSync(path.join(site.root, LEDGER), JSON.stringify(ledger, null, 2));
     assert.ok(rowIds(page, 'i-owe').includes('A-260823-2'));
     await page.el('today-reload').fire('click');
+    await showAll(page);
     assert.ok(!rowIds(page, 'i-owe').includes('A-260823-2'));
     assert.match(page.el('today-sub').innerHTML, /Six for you/);
     assert.equal(page.el('today-count').textContent, '17');
@@ -328,6 +345,7 @@ describe('the actions', () => {
   before(async () => {
     site = await startSite({ prepare: writeFixture });
     page = await openPage(site, '#/today');
+    await showAll(page);
   });
   after(async () => { await site?.stop(); });
 
@@ -504,14 +522,17 @@ describe('People with no flags', () => {
   });
   after(async () => { await site?.stop(); });
 
-  test('the group\'s header says so in one line', async () => {
+  test('Team health and the Team alerts tile say so', async () => {
     const view = await site.api.today();
     assert.equal(view.people.flagCount, 0);
     assert.deepEqual(view.people.reports.map((r) => [r.name, r.flags]), [['Riley Brooks', []]]);
     const page = await openPage(site, '#/today');
-    const people = sectionHtml(page, 'people');
-    assert.match(people, /No flags: every report has met with you in the last 30 days, and none has a busy week\./);
-    assert.doesNotMatch(people, /chip-late/);
+    const team = sectionHtml(page, 'team');
+    assert.match(team, /1 report</);
+    assert.match(team, /Heavy loads<\/span><span class="team-sub">3\+ open items past due or due within a week/);
+    assert.match(team, /No 1:1 in 30\+ days<\/span><span class="team-sub">Longest gap: Riley, 7 days/);
+    assert.doesNotMatch(team, /team-count-late/);
+    assert.match(page.el('today-body').innerHTML, /id="tile-team-alerts" href="#\/people">[^]*?<span class="tile-count">0<\/span><span class="tile-sub">No one flagged<\/span>/);
   });
 });
 
@@ -539,11 +560,12 @@ describe('when something is missing', () => {
       assert.equal(view.people, null);
 
       const page = await openPage(site, '#/today');
+      await showAll(page);
       const line = 'There is no <code>people.md</code> in this workspace, so Today can’t tell which items are yours.';
-      assert.ok(sectionHtml(page, 'open').includes(line), sectionHtml(page, 'open').slice(0, 400));
-      assert.ok(sectionHtml(page, 'people').includes(line));
-      assert.doesNotMatch(page.el('today-body').innerHTML, />I owe<|>Owed to me</);
-      assert.match(sectionHtml(page, 'open'), />Open items</);
+      assert.ok(sectionHtml(page, 'now').includes(line), sectionHtml(page, 'now').slice(0, 400));
+      assert.ok(sectionHtml(page, 'team').includes('There is no <code>people.md</code> in this workspace, so Team health can’t be worked out.'));
+      assert.deepEqual(rowIds(page, 'open'), ids(view, 'open'));
+      assert.equal(page.el('today-greeting').innerHTML.match(/^Good \w+\.$/)?.[0], page.el('today-greeting').innerHTML, 'no first name');
       // Each row names its owner; the actions are Close and Re-date, since it can't tell whose an item is.
       assert.match(rowHtml(page, 'A-260915-1'), /Riley Brooks/);
       assert.deepEqual(buttons(rowHtml(page, 'A-260915-1')), [['redate', 'Re-date'], ['close', 'Close']]);
@@ -570,8 +592,13 @@ describe('when something is missing', () => {
         const line = problem.reason === 'no-me'
           ? '<code>people.md</code> has no row marked “me”, so Today can’t tell which items are yours.'
           : '<code>people.md</code> has 2 rows marked “me”, so Today can’t tell which items are yours.';
-        assert.ok(sectionHtml(page, 'open').includes(line));
-        assert.ok(sectionHtml(page, 'people').includes(line));
+        assert.ok(sectionHtml(page, 'now').includes(line));
+        assert.ok(sectionHtml(page, 'team').includes(line.replace('Today can’t tell which items are yours', 'Team health can’t be worked out')));
+        assert.match(page.el('today-greeting').innerHTML, /^Good (morning|afternoon|evening)\.$/);
+        // The tile and the numbers that need "me" say so instead of a count.
+        const body = page.el('today-body').innerHTML;
+        assert.match(body, /id="tile-team-alerts"[^>]*>[^]*?<span class="tile-count">—<\/span>/);
+        assert.match(body, /id="number-your-overdue"><dt>Your overdue items<\/dt><dd class="number-value">—<\/dd>/);
       });
     });
   }
@@ -617,15 +644,17 @@ describe('when something is missing', () => {
       before(async () => { site = await startSite({ prepare }); });
       after(async () => { await site?.stop(); });
 
-      test('one line saying how to start, and nothing else', async () => {
+      test('the list says there is nothing yet and links to Help; the tiles are 0; no rows and no foot', async () => {
         const view = await site.api.today();
         assert.equal(view.status, 'no-summaries');
         assert.deepEqual(view.groups, []);
         const page = await openPage(site, '#/today');
         const body = page.el('today-body').innerHTML;
-        assert.match(body, /No meeting summaries yet\. Save a summary in <code>meeting-notes\/<\/code> and it shows up here\./);
-        assert.doesNotMatch(body, /<section\b|today-foot|today-row/);
-        assert.doesNotMatch(page.html(), /today-reload/);
+        assert.match(sectionHtml(page, 'now'), /Nothing yet: there are no meeting summaries\. Save a summary in <code>meeting-notes\/<\/code> and what needs you shows up here\. <a href="#\/help">Help<\/a> shows how to start\./);
+        // Team alerts still counts the reports in people.md that have had no 1:1 (the starter has none: today-page.test.js).
+        const alerts = String(view.briefing.tiles.teamAlerts.count);
+        assert.deepEqual([...body.matchAll(/<span class="tile-count">([^<]*)<\/span>/g)].map((m) => m[1]), ['0', '0', '0', '0', alerts]);
+        assert.doesNotMatch(body, /today-foot|today-row|Something went wrong/);
         assert.equal(page.el('today-sub').innerHTML, '');
       });
     });
@@ -645,7 +674,8 @@ describe('the app opens on Today; the sidebar count; what is never on Today', ()
     for (const hash of ['', '#/', '#/nowhere']) {
       const page = await openPage(site, hash);
       assert.equal(page.body.dataset.page, 'today', hash);
-      assert.match(page.html(), /<h1>Today<\/h1>/, hash);
+      assert.match(page.html(), /<h1 id="today-greeting"><\/h1>/, hash);
+      assert.match(page.el('today-greeting').innerHTML, /^Good (morning|afternoon|evening), Kevin\.$/, hash);
     }
   });
 
@@ -673,7 +703,7 @@ describe('the app opens on Today; the sidebar count; what is never on Today', ()
 
   test('in the sample the header says the date is the newest meeting\'s, Sep 22, 2026', async () => {
     const page = await openPage(site, '#/today');
-    assert.match(page.el('today-sub').innerHTML, /^Tuesday, Sep 22, 2026, the date of the newest meeting\. /);
+    assert.equal(page.el('today-date').textContent, 'Tuesday, Sep 22, 2026 · the date of the newest meeting');
   });
 
   test('#/meetings?attendee=<name> opens Meetings filtered to that attendee', async () => {
@@ -693,7 +723,7 @@ describe('a workspace that is not the sample', () => {
     assert.equal(view.asOfIsNewestMeeting, false);
     const page = await openPage(site, '#/today');
     const weekday = new Date(`${view.asOf}T00:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long' });
-    assert.match(page.el('today-sub').innerHTML, new RegExp(`^${weekday}, `));
-    assert.doesNotMatch(page.el('today-sub').innerHTML, /newest meeting/);
+    assert.match(page.el('today-date').textContent, new RegExp(`^${weekday}, `));
+    assert.doesNotMatch(page.el('today-date').textContent, /newest meeting/);
   });
 });

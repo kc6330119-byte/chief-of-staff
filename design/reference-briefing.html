@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Reference: Today as a briefing (0.3.0)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#2450C8}a:hover{color:#16357F}
+</style>
+</head>
+<body>
+<!-- Reference mock-up for 0.3.0 step 2. Sample data as of Tue Sep 22, 2026, with the sample ledger. Static: no script. -->
+<div style="display: flex; flex-wrap: wrap; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Hanken Grotesk', system-ui, sans-serif; color: #171B22; background: #F6F7F9">
+
+<nav aria-label="Pages" style="flex: 1 0 220px; box-sizing: border-box; padding: 20px 12px; background: #ECEEF2; border-right: 1px solid #D9DDE3; display: flex; flex-direction: column; gap: 20px">
+<div style="padding: 4px 10px">
+<div style="font-size: 15px; font-weight: 700; line-height: 1.3">Chief of Staff</div>
+<div style="font-size: 12px; color: #566070; line-height: 1.4">for Managers</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<a href="Briefing.dc.html" aria-current="page" style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 10px; border-radius: 8px; background: #2450C8; color: #FFFFFF; font-size: 14px; font-weight: 600; text-decoration: none">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 9h18M8 2v4M16 2v4"></path></svg>
+<span style="flex: 1">Today</span>
+<span style="padding: 2px 8px; border-radius: 10px; background: #FFFFFF; color: #171B22; font-size: 12px; font-weight: 700">11</span>
+</a>
+<a href="#" style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 10px; border-radius: 8px; color: #171B22; font-size: 14px; font-weight: 500; text-decoration: none">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg>
+<span style="flex: 1">Meetings</span>
+</a>
+<a href="Board.dc.html" style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 10px; border-radius: 8px; color: #171B22; font-size: 14px; font-weight: 500; text-decoration: none">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"></rect><rect x="10" y="4" width="5" height="11" rx="1"></rect><rect x="17" y="4" width="4" height="7" rx="1"></rect></svg>
+<span style="flex: 1">Board</span>
+<span style="font-size: 12px; color: #566070">23 open</span>
+</a>
+<a href="#" style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 10px; border-radius: 8px; color: #171B22; font-size: 14px; font-weight: 500; text-decoration: none">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"></path><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.8c1.7.9 2.7 2.6 3 5.2"></path></svg>
+<span style="flex: 1">People</span>
+</a>
+<a href="#" style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 10px; border-radius: 8px; color: #171B22; font-size: 14px; font-weight: 500; text-decoration: none">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="2"></rect><path d="M12 8V4M9 13v2M15 13v2"></path></svg>
+<span style="flex: 1">Agents</span>
+</a>
+<a href="#" style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 10px; border-radius: 8px; color: #171B22; font-size: 14px; font-weight: 500; text-decoration: none">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"></path><path d="M5 17a3 3 0 0 1 3-3h11"></path></svg>
+<span style="flex: 1">Library</span>
+</a>
+</div>
+<div style="margin-top: auto; padding: 12px 10px; display: flex; flex-direction: column; gap: 8px">
+<span style="align-self: flex-start; padding: 4px 10px; border-radius: 12px; background: #FCEBD0; color: #7A4100; font-size: 12px; font-weight: 700; line-height: 16px">Recreated demo data</span>
+<a href="#" style="display: inline-flex; align-items: center; gap: 6px; min-height: 32px; font-size: 13px; font-weight: 600; color: #2450C8; text-decoration: none">Help</a>
+</div>
+</nav>
+
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 28px 32px 40px">
+<div style="max-width: 1120px; display: flex; flex-direction: column; gap: 20px">
+
+<header style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px">
+<div>
+<div style="font-size: 13px; font-weight: 600; color: #566070">Tuesday, Sep 22, 2026</div>
+<h1 style="margin: 4px 0 0; font-size: 30px; font-weight: 700; line-height: 1.2">Good morning, Kevin.</h1>
+<p style="margin: 6px 0 0; font-size: 15px; line-height: 1.45; color: #566070">Five for you, five owed to you, one to confirm.</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px">
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #566070">Search
+<input type="search" placeholder="Actions, meetings, people" style="box-sizing: border-box; width: 260px; max-width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid #C3C9D2; border-radius: 8px; background: #FFFFFF; color: #171B22; font-family: inherit; font-size: 14px">
+</label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #566070">Week
+<select style="min-height: 44px; padding: 0 12px; border: 1px solid #C3C9D2; border-radius: 8px; background: #FFFFFF; color: #171B22; font-family: inherit; font-size: 14px">
+<option>This week (Sep 21–27)</option>
+<option>Last week (Sep 14–20)</option>
+</select>
+</label>
+<button type="button" style="min-height: 44px; padding: 0 14px; border: 1px solid #C3C9D2; border-radius: 8px; background: #FFFFFF; color: #171B22; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Reload</button>
+</div>
+</header>
+
+<section aria-label="Counts" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px">
+<a href="#" style="display: flex; flex-direction: column; gap: 4px; padding: 16px; border: 1px solid #D9DDE3; border-radius: 12px; background: #FFFFFF; color: #171B22; text-decoration: none">
+<span style="font-size: 13px; font-weight: 600; color: #566070">Due today</span>
+<span style="font-size: 30px; font-weight: 700; line-height: 1.1">0</span>
+<span style="font-size: 12px; color: #566070">Nothing due today</span>
+</a>
+<a href="#" style="display: flex; flex-direction: column; gap: 4px; padding: 16px; border: 1px solid #E8C690; border-radius: 12px; background: #FFF8EC; color: #171B22; text-decoration: none">
+<span style="font-size: 13px; font-weight: 600; color: #7A4100">Overdue</span>
+<span style="font-size: 30px; font-weight: 700; line-height: 1.1; color: #7A4100">4</span>
+<span style="font-size: 12px; color: #7A4100">3 over 30 days</span>
+</a>
+<a href="#" style="display: flex; flex-direction: column; gap: 4px; padding: 16px; border: 1px solid #D9DDE3; border-radius: 12px; background: #FFFFFF; color: #171B22; text-decoration: none">
+<span style="font-size: 13px; font-weight: 600; color: #566070">Due this week</span>
+<span style="font-size: 30px; font-weight: 700; line-height: 1.1">0</span>
+<span style="font-size: 12px; color: #566070">Next: 3 due Tue, Sep 29</span>
+</a>
+<a href="#" style="display: flex; flex-direction: column; gap: 4px; padding: 16px; border: 1px solid #B9DCCB; border-radius: 12px; background: #F0F8F4; color: #171B22; text-decoration: none">
+<span style="font-size: 13px; font-weight: 600; color: #1D5B40">Completed</span>
+<span style="font-size: 30px; font-weight: 700; line-height: 1.1; color: #1D5B40">2</span>
+<span style="font-size: 12px; color: #1D5B40">This week · 2 last week</span>
+</a>
+<a href="#" style="display: flex; flex-direction: column; gap: 4px; padding: 16px; border: 1px solid #D9DDE3; border-radius: 12px; background: #FFFFFF; color: #171B22; text-decoration: none">
+<span style="font-size: 13px; font-weight: 600; color: #566070">Team alerts</span>
+<span style="font-size: 30px; font-weight: 700; line-height: 1.1">0</span>
+<span style="font-size: 12px; color: #566070">No one flagged</span>
+</a>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+
+<section aria-labelledby="b-now" style="flex: 3 1 560px; min-width: 0; background: #FFFFFF; border: 1px solid #D9DDE3; border-radius: 12px; overflow: hidden">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 10px; padding: 16px 20px">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px">
+<h2 id="b-now" style="margin: 0; font-size: 17px; font-weight: 700">Needs you now</h2>
+<span style="font-size: 13px; color: #566070">Showing 7 of 11, in Today's order</span>
+</div>
+<a href="#" style="font-size: 13px; font-weight: 600; color: #2450C8">Show all 11</a>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 20px; border-top: 1px solid #E4E7EC">
+<div style="flex: 0 0 132px"><span style="display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; line-height: 16px; white-space: nowrap; background: #FCEBD0; color: #7A4100">Past due 137 days</span></div>
+<div style="flex: 1 1 260px; min-width: 0">
+<div style="font-size: 14px; font-weight: 600; line-height: 1.35">Log Sam's incident communication (15-min updates, 0 escalations across 3 affected customers) as goal evidence</div>
+<div style="margin-top: 3px; font-size: 12px; line-height: 1.45; color: #566070">You · Due May 8 · <a href="#" style="color: #2450C8">Kevin &amp; Sam 1:1, May 5</a></div>
+</div>
+<div style="display: flex; gap: 8px">
+<button type="button" style="min-height: 44px; padding: 0 12px; border: 1px solid #C3C9D2; border-radius: 8px; background: #FFFFFF; color: #171B22; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Re-date</button>
+<button type="button" style="min-height: 44px; padding: 0 14px; border: 1px solid #2450C8; border-radius: 8px; background: #2450C8; color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Close</button>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 20px; border-top: 1px solid #E4E7EC">
+<div style="flex: 0 0 132px"><span style="display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; line-height: 16px; white-space: nowrap; background: #FCEBD0; color: #7A4100">Past due 7 days</span></div>
+<div style="flex: 1 1 260px; min-width: 0">
+<div style="font-size: 14px; font-weight: 600; line-height: 1.35">Log the time-to-acknowledge improvement (~9 min in June → 4 min in August) against Sam's on-call goal, with dates (with Sam)</div>
+<div style="margin-top: 3px; font-size: 12px; line-height: 1.45; color: #566070">You · Due Sep 15 · <a href="#" style="color: #2450C8">Kevin &amp; Sam 1:1, Sep 15</a></div>
+</div>
+<div style="display: flex; gap: 8px">
+<button type="button" style="min-height: 44px; padding: 0 12px; border: 1px solid #C3C9D2; border-radius: 8px; background: #FFFFFF; color: #171B22; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Re-date</button>
+<button type="button" style="min-height: 44px; padding: 0 14px; border: 1px solid #2450C8; border-radius: 8px; background: #2450C8; color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Close</button>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 20px; border-top: 1px solid #E4E7EC">
+<div style="flex: 0 0 132px"><span style="display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; line-height: 16px; white-space: nowrap; background: #E3EAFB; color: #1B3A8F">Due in 7 days</span></div>
+<div style="flex: 1 1 260px; min-width: 0">
+<div style="font-size: 14px; font-weight: 600; line-height: 1.35">Sponsor the change at the change board</div>
+<div style="margin-top: 3px; font-size: 12px; line-height: 1.45; color: #566070">You · Due Tue, Sep 29 · <a href="#" style="color: #2450C8">Kevin &amp; Sam 1:1, Sep 15</a></div>
+</div>
+<div style="display: flex; gap: 8px">
+<button type="button" style="min-height: 44px; padding: 0 12px; border: 1px solid #C3C9D2; border-radius: 8px; background: #FFFFFF; color: #171B22; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Re-date</button>
+<button type="button" style="min-height: 44px; padding: 0 14px; border: 1px solid #2450C8; border-radius: 8px; background: #2450C8; color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Close</button>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 20px; border-top: 1px solid #E4E7EC">
+<div style="flex: 0 0 132px"><span style="display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; line-height: 16px; white-space: nowrap; background: #FCEBD0; color: #7A4100">Past due 137 days</span></div>
+<div style="flex: 1 1 260px; min-width: 0">
+<div style="font-size: 14px; font-weight: 600; line-height: 1.35">Take Friday afternoon off</div>
+<div style="margin-top: 3px; font-size: 12px; line-height: 1.45; color: #566070">Sam Torres · Due May 8 · <a href="#" style="color: #2450C8">Kevin &amp; Sam 1:1, May 5</a></div>
+</div>
+<div style="display: flex; gap: 8px">
+<button type="button" style="min-height: 44px; padding: 0 12px; border: 1px solid #C3C9D2; border-radius: 8px; background: #FFFFFF; color: #171B22; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Re-date</button>
+<button type="button" style="min-height: 44px; padding: 0 14px; border: 1px solid #2450C8; border-radius: 8px; background: #2450C8; color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Close</button>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 20px; border-top: 1px solid #E4E7EC">
+<div style="flex: 0 0 132px"><span style="display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; line-height: 16px; white-space: nowrap; background: #E3EAFB; color: #1B3A8F">Due in 7 days</span></div>
+<div style="flex: 1 1 260px; min-width: 0">
+<div style="font-size: 14px; font-weight: 600; line-height: 1.35">Write the change request for the routing rule: ProcWatch scheduler heartbeat alerts page the scheduler on-call. Add Kevin as sponsor.</div>
+<div style="margin-top: 3px; font-size: 12px; line-height: 1.45; color: #566070">Sam Torres · Due Tue, Sep 29 · <a href="#" style="color: #2450C8">Kevin &amp; Sam 1:1, Sep 15</a></div>
+</div>
+<div style="display: flex; gap: 8px">
+<button type="button" style="min-height: 44px; padding: 0 12px; border: 1px solid #C3C9D2; border-radius: 8px; background: #FFFFFF; color: #171B22; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Re-date</button>
+<button type="button" style="min-height: 44px; padding: 0 14px; border: 1px solid #2450C8; border-radius: 8px; background: #2450C8; color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Close</button>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 20px; border-top: 1px solid #E4E7EC">
+<div style="flex: 0 0 132px"><span style="display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; line-height: 16px; white-space: nowrap; background: #E3EAFB; color: #1B3A8F">Due in 7 days</span></div>
+<div style="flex: 1 1 260px; min-width: 0">
+<div style="font-size: 14px; font-weight: 600; line-height: 1.35">Add her name in support of Sam's ProcWatch routing change</div>
+<div style="margin-top: 3px; font-size: 12px; line-height: 1.45; color: #566070">Dana Whitfield · Due Tue, Sep 29 · <a href="#" style="color: #2450C8">Dana &amp; Kevin 1:1, Sep 22</a></div>
+</div>
+<div style="display: flex; gap: 8px">
+<button type="button" style="min-height: 44px; padding: 0 12px; border: 1px solid #C3C9D2; border-radius: 8px; background: #FFFFFF; color: #171B22; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Re-date</button>
+<button type="button" style="min-height: 44px; padding: 0 14px; border: 1px solid #2450C8; border-radius: 8px; background: #2450C8; color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Close</button>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 20px; border-top: 1px solid #E4E7EC">
+<div style="flex: 0 0 132px"><span style="display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; line-height: 16px; white-space: nowrap; background: #EFE3F8; color: #5B2A86">Reported dropped Jul 28</span></div>
+<div style="flex: 1 1 260px; min-width: 0">
+<div style="font-size: 14px; font-weight: 600; line-height: 1.35">Ask Praveen whether he can do a few pairing sessions with Sam on scheduler internals (lock table, failover, full path)</div>
+<div style="margin-top: 3px; font-size: 12px; line-height: 1.45; color: #566070">You · Still open on your Board · <a href="#" style="color: #2450C8">Kevin &amp; Sam 1:1, May 5</a></div>
+</div>
+<div style="display: flex; gap: 8px">
+<button type="button" style="min-height: 44px; padding: 0 12px; border: 1px solid #C3C9D2; border-radius: 8px; background: #FFFFFF; color: #171B22; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Keep open</button>
+<button type="button" style="min-height: 44px; padding: 0 14px; border: 1px solid #2450C8; border-radius: 8px; background: #2450C8; color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Close</button>
+</div>
+</div>
+</section>
+
+<section aria-labelledby="b-team" style="flex: 1 1 280px; min-width: 0; background: #FFFFFF; border: 1px solid #D9DDE3; border-radius: 12px; overflow: hidden">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 16px 20px">
+<h2 id="b-team" style="margin: 0; font-size: 17px; font-weight: 700">Team health</h2>
+<span style="font-size: 13px; color: #566070">3 reports</span>
+</div>
+<a href="#" style="display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-top: 1px solid #E4E7EC; color: #171B22; text-decoration: none">
+<span style="flex: 0 0 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 18px; background: #E8EBEF; font-size: 15px; font-weight: 700">0</span>
+<span style="flex: 1; min-width: 0"><span style="display: block; font-size: 14px; font-weight: 600">Heavy loads</span><span style="display: block; font-size: 12px; color: #566070">3+ open items past due or due within a week</span></span>
+</a>
+<a href="#" style="display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-top: 1px solid #E4E7EC; color: #171B22; text-decoration: none">
+<span style="flex: 0 0 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 18px; background: #FCEBD0; color: #7A4100; font-size: 15px; font-weight: 700">1</span>
+<span style="flex: 1; min-width: 0"><span style="display: block; font-size: 14px; font-weight: 600">Overdue, owed to you</span><span style="display: block; font-size: 12px; color: #566070">Sam Torres, 137 days</span></span>
+</a>
+<a href="#" style="display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-top: 1px solid #E4E7EC; color: #171B22; text-decoration: none">
+<span style="flex: 0 0 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 18px; background: #E8EBEF; font-size: 15px; font-weight: 700">0</span>
+<span style="flex: 1; min-width: 0"><span style="display: block; font-size: 14px; font-weight: 600">No 1:1 in 30+ days</span><span style="display: block; font-size: 12px; color: #566070">Longest gap: Praveen, 14 days</span></span>
+</a>
+<a href="#" style="display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-top: 1px solid #E4E7EC; color: #171B22; text-decoration: none">
+<span style="flex: 0 0 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 18px; background: #EFE3F8; color: #5B2A86; font-size: 15px; font-weight: 700">1</span>
+<span style="flex: 1; min-width: 0"><span style="display: block; font-size: 14px; font-weight: 600">Awaiting your input</span><span style="display: block; font-size: 12px; color: #566070">A summary and your Board disagree</span></span>
+</a>
+<div style="padding: 12px 20px 16px; border-top: 1px solid #E4E7EC">
+<a href="#" style="display: flex; align-items: center; justify-content: center; min-height: 44px; border: 1px solid #C3C9D2; border-radius: 8px; font-size: 13px; font-weight: 600; color: #171B22; text-decoration: none">View People</a>
+</div>
+</section>
+
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px">
+
+<section aria-labelledby="b-well" style="background: #FFFFFF; border: 1px solid #D9DDE3; border-radius: 12px; overflow: hidden">
+<div style="padding: 16px 20px 8px">
+<h2 id="b-well" style="margin: 0; font-size: 17px; font-weight: 700">What went well</h2>
+<div style="margin-top: 2px; font-size: 13px; color: #566070">The Coach's words, from this week's summaries</div>
+</div>
+<ul style="list-style: none; margin: 0; padding: 0 20px 8px">
+<li style="display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid #E4E7EC"><span style="flex: 0 0 8px; height: 8px; margin-top: 7px; border-radius: 4px; background: #2F8A5F"></span><span style="flex: 1; font-size: 14px; line-height: 1.4">wins before asks, and the asks were earned by the wins.</span><a href="#" style="flex: 0 0 auto; font-size: 12px; color: #2450C8">Sep 22</a></li>
+<li style="display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid #E4E7EC"><span style="flex: 0 0 8px; height: 8px; margin-top: 7px; border-radius: 4px; background: #2F8A5F"></span><span style="flex: 1; font-size: 14px; line-height: 1.4">the credit went to the team, by name.</span><a href="#" style="flex: 0 0 auto; font-size: 12px; color: #2450C8">Sep 22</a></li>
+<li style="display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid #E4E7EC"><span style="flex: 0 0 8px; height: 8px; margin-top: 7px; border-radius: 4px; background: #2F8A5F"></span><span style="flex: 1; font-size: 14px; line-height: 1.4">Kevin admitted the July miss before Dana could notice it.</span><a href="#" style="flex: 0 0 auto; font-size: 12px; color: #2450C8">Sep 22</a></li>
+</ul>
+<div style="padding: 0 20px 16px"><a href="#" style="font-size: 13px; font-weight: 600; color: #2450C8">1 more</a></div>
+</section>
+
+<section aria-labelledby="b-better" style="background: #FFFFFF; border: 1px solid #D9DDE3; border-radius: 12px; overflow: hidden">
+<div style="padding: 16px 20px 8px">
+<h2 id="b-better" style="margin: 0; font-size: 17px; font-weight: 700">What I could do better</h2>
+<div style="margin-top: 2px; font-size: 13px; color: #566070">The Coach's words, from this week's summaries</div>
+</div>
+<ul style="list-style: none; margin: 0; padding: 0 20px 8px">
+<li style="display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid #E4E7EC"><span style="flex: 0 0 8px; height: 8px; margin-top: 7px; border-radius: 4px; background: #B4470E"></span><span style="flex: 1; font-size: 14px; line-height: 1.4">the headcount question needed a question back.</span><a href="#" style="flex: 0 0 auto; font-size: 12px; color: #2450C8">Sep 22</a></li>
+<li style="display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid #E4E7EC"><span style="flex: 0 0 8px; height: 8px; margin-top: 7px; border-radius: 4px; background: #B4470E"></span><span style="flex: 1; font-size: 14px; line-height: 1.4">Marco's backfill didn't come up, in the one meeting where it mattered most.</span><a href="#" style="flex: 0 0 auto; font-size: 12px; color: #2450C8">Sep 22</a></li>
+<li style="display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid #E4E7EC"><span style="flex: 0 0 8px; height: 8px; margin-top: 7px; border-radius: 4px; background: #B4470E"></span><span style="flex: 1; font-size: 14px; line-height: 1.4">Praveen as successor needs Praveen's say.</span><a href="#" style="flex: 0 0 auto; font-size: 12px; color: #2450C8">Sep 22</a></li>
+</ul>
+<div style="padding: 0 20px 16px"><a href="#" style="font-size: 13px; font-weight: 600; color: #2450C8">1 more</a></div>
+</section>
+
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px">
+
+<section aria-labelledby="b-numbers" style="background: #FFFFFF; border: 1px solid #D9DDE3; border-radius: 12px; padding: 16px 20px 20px">
+<h2 id="b-numbers" style="margin: 0; font-size: 17px; font-weight: 700">This week in numbers</h2>
+<div style="margin-top: 2px; font-size: 13px; color: #566070">Sep 21–27, counted to Sep 22</div>
+<div style="margin-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+<div><div style="font-size: 13px; color: #566070">Closed</div><div style="font-size: 26px; font-weight: 700">2</div><div style="font-size: 12px; color: #566070">2 last week</div></div>
+<div><div style="font-size: 13px; color: #566070">Closed on time</div><div style="font-size: 26px; font-weight: 700">0 of 1</div><div style="font-size: 12px; color: #566070">of those with a due date</div></div>
+<div><div style="font-size: 13px; color: #566070">Your overdue items</div><div style="font-size: 26px; font-weight: 700; color: #7A4100">3</div><div style="font-size: 12px; color: #566070">items you own, past due</div></div>
+<div><div style="font-size: 13px; color: #566070">1:1 coverage</div><div style="font-size: 26px; font-weight: 700">3 of 3</div><div style="font-size: 12px; color: #566070">reports met in 14 days</div></div>
+</div>
+</section>
+
+<section aria-labelledby="b-activity" style="background: #FFFFFF; border: 1px solid #D9DDE3; border-radius: 12px; padding: 16px 20px 16px">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px">
+<h2 id="b-activity" style="margin: 0; font-size: 17px; font-weight: 700">Weekly activity</h2>
+<div style="display: flex; gap: 14px; font-size: 12px; color: #3D4755">
+<span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 14px; height: 3px; background: #2450C8"></span>Created</span>
+<span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 14px; height: 3px; background: #2F8A5F"></span>Completed</span>
+<span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 14px; height: 3px; background: #B4470E"></span>Overdue</span>
+</div>
+</div>
+<svg viewBox="0 0 420 190" role="img" aria-label="Created, completed and overdue items per week, Aug 17 to Sep 21" style="display: block; width: 100%; height: auto; margin-top: 10px">
+<g stroke="#E4E7EC" stroke-width="1">
+<line x1="36" y1="20" x2="410" y2="20"></line>
+<line x1="36" y1="60" x2="410" y2="60"></line>
+<line x1="36" y1="100" x2="410" y2="100"></line>
+<line x1="36" y1="140" x2="410" y2="140"></line>
+</g>
+<g fill="#566070" font-size="11" font-family="inherit" text-anchor="end">
+<text x="28" y="24">9</text>
+<text x="28" y="64">6</text>
+<text x="28" y="104">3</text>
+<text x="28" y="144">0</text>
+</g>
+<polyline fill="none" stroke="#2450C8" stroke-width="2.5" stroke-linejoin="round" points="50,140 122,140 194,140 266,20 338,73.3 400,86.7"></polyline>
+<polyline fill="none" stroke="#2F8A5F" stroke-width="2.5" stroke-linejoin="round" points="50,140 122,140 194,140 266,140 338,113.3 400,113.3"></polyline>
+<polyline fill="none" stroke="#B4470E" stroke-width="2.5" stroke-linejoin="round" points="50,100 122,100 194,100 266,100 338,73.3 400,86.7"></polyline>
+<g fill="#566070" font-size="11" font-family="inherit" text-anchor="middle">
+<text x="50" y="164">Aug 17</text>
+<text x="122" y="164">Aug 24</text>
+<text x="194" y="164">Aug 31</text>
+<text x="266" y="164">Sep 7</text>
+<text x="338" y="164">Sep 14</text>
+<text x="400" y="164">Sep 21</text>
+</g>
+<text x="36" y="184" fill="#566070" font-size="11" font-family="inherit">Weeks starting Monday. Overdue = open and past due at the week's end.</text>
+</svg>
+</section>
+
+</div>
+
+</div>
+</main>
+</div>
+</body>
+</html>

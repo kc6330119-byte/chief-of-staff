@@ -15,6 +15,9 @@ The sample is a made-up team at a made-up company. While it is open, the sidebar
 data". In the sample, Today and the ages count from the date of its newest meeting, not from today, so
 it reads the same on any day.
 
+The sample comes with `actions/ledger.json`, in which four items are already closed, on Sep 16 and Sep 22.
+So Completed on Today and the activity chart have something to show.
+
 A copy never replaces a file or folder that is already there. If the name is taken, nothing is copied, and
 you choose a new name.
 
@@ -22,13 +25,42 @@ The window title shows which folder is open.
 
 ### What the pages show
 
-- **Today**: what needs you now. "I owe" lists your items that are past due, due within a week, or open
-  more than 30 days. "Owed to me" lists the same for items someone else owns. "Needs your confirmation"
-  lists items where a later meeting disagrees with your Board. Below them, People shows your reports. A
-  report gets a flag after more than 30 days without a meeting with you ("No 1:1 in N days"), or when three
-  or more of their open items are past due or due within a week ("Busy week").
+- **Today**: a briefing for the day. It counts to the date at the top: today, or in the sample the date
+  of its newest meeting.
+  - **The tiles.** **Due today**, **Overdue** and **Due this week** count open items, whoever owns them,
+    due on that date, before it, or from it to Friday. Overdue also says how many are over 30 days past
+    due. Click one of these three to show only its items in the list. Click it again, or **Show
+    everything**, to see them all. **Completed** counts the items closed in the week you pick, and opens
+    the Board. **Team alerts** counts your reports with a flag on People, and opens People. A report gets
+    a flag after more than 30 days without a meeting with you, or none yet, or when three or more of their
+    open items are past due or due within a week.
+  - **Needs you now** lists your items and the items owed to you that are past due, due within a week, or
+    open more than 30 days. Then it lists the items where a later summary disagrees with your Board. It
+    shows the first seven: click **Show all** for the rest. Each row has its buttons: **Close**, and
+    **Re-date** (or **Set a date**) on your own items. Where a summary disagrees, the buttons are **Close**
+    and **Keep open**, or **Reopen** and **Keep closed**. A row you act on stays where it is, with
+    **Reopen** after a Close, until you click **Reload**. After Keep open or Keep closed, it goes.
+  - **Team health**: Heavy loads (reports with three or more open items past due or due within a week),
+    Overdue, owed to you, No 1:1 in 30+ days, and Awaiting your input (the items where a summary
+    disagrees with your Board). Click Overdue, owed to you or Awaiting your input to go to the item's row.
+    **View People** opens People.
+  - **Week**: This week or Last week, each Monday to Sunday. It changes Completed, the reflections and the
+    week in numbers. Everything else stays counted to the date at the top. Today starts on This week each
+    time you open it.
+  - **What went well** and **What I could do better**: the Coach's own bold headlines, word for word, from
+    the "What went well:" and "Could do better:" points in Other Insights of that week's summaries. Click
+    one to read the whole point, or its date to open the meeting. Nothing from a Manager-only note is
+    shown.
+  - **In numbers**: Closed, the items closed that week; Closed on time, how many of those with a due date
+    were closed by it; Your overdue items, the open items you own that are past due; and 1:1 coverage, how
+    many of your reports you met in the last 14 days. The last two always count to the date at the top. With Last week picked,
+    they say "as of" that date.
+  - **Weekly activity**: a chart of six weeks, each starting Monday. For each week: the items Created at
+    that week's meetings, the items Completed, and the items Overdue (open and past due at the week's
+    end). Point at a week to see its numbers.
 - **Meetings**: every summary, newest first. Click one to read it. Above the list, "Tracked items across
-  all meetings" shows each action item with its ID, owner, age and latest status.
+  all meetings" shows each action item with its ID, owner, age and latest status. **Hide closed** hides the
+  items closed on your Board, and those whose latest summary says done or dropped.
 - **Board**: three columns, To do, Doing and Done. Every action item with an ID is a card. It stays in To
   do until you move it. Drag a card, or use its arrows. A card in Done is closed.
 - **People**: you, then your reports, your manager, peers and others, in the order of `people.md`. Each
@@ -144,7 +176,7 @@ Dropped. Only you close an item, in the app.
   click a card's pencil to set your date or a note. **Use the summary’s date** drops your date.
 
 A summary never closes or reopens anything. When a later summary disagrees with your Board, the item shows
-under "Needs your confirmation" on Today:
+at the end of "Needs you now" on Today, and "Awaiting your input" counts it:
 
 - A summary says it is done or dropped, but it is still open in the app. Click **Close**, or **Keep open**.
 - You closed it, but a later summary still mentions it as open. Click **Reopen**, or **Keep closed**.
@@ -172,6 +204,18 @@ A Board card or a Today row with notes shows "1 note" (or more). Click it to go 
 
 The coach reads your notes before it writes the next summary with that person. It never presents a note as
 something said in the meeting.
+
+### Search
+
+The Search box is at the top of Today. As you type, ignoring capitals, it finds:
+
+- action items, by ID, title or owner, and your own cards, by title or owner
+- meetings, by title, date or attendee
+- people in `people.md`, by name, role or any name under Also called
+
+Click a result to open its meeting, the Board (for your own card) or the person's page. Press Escape to
+clear the box. Search never searches the text of a note between meetings, a card's note, or a Manager-only
+note. Suggested items are not searched until you accept them.
 
 ### Run an agent
 
@@ -231,7 +275,7 @@ holds the folder's path and nothing more.
 Only these four, in the workspace:
 
 - `actions/ledger.json`: what you close, reopen, re-date, accept and keep, your own cards, and the order of
-  the Board. It is made the first time you change something.
+  the Board. In a new workspace it is made the first time you change something. The sample comes with one.
 - `notes/notes.json`: your notes between meetings. It is made with your first note.
 - `library/books.json`: your books, from the Library page.
 - `corrections/corrections.json`: your log under "Rules learned" on the Agents page.
@@ -258,8 +302,8 @@ your employer's rules before you use them with any AI tool.
 - **It has no usable ID.** The Board says how many action items have no usable ID, and on Meetings such a
   row shows "no ID" or an ID that is not in the form A-YYMMDD-n. Ask Claude Code to give the item an ID in
   that form.
-- **A summary says it is done.** That is a report, not a close. Close it yourself, on Today under "Needs
-  your confirmation".
+- **A summary says it is done.** That is a report, not a close. Close it yourself, on Today in "Needs you
+  now".
 - **The app can't save.** If `actions/ledger.json` can't be read, the app says so and saves nothing until
   the file is fixed.
 

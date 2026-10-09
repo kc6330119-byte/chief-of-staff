@@ -77,7 +77,8 @@ try {
   const minOs = read('LSMinimumSystemVersion');
   check(`the minimum macOS version is ${CONF.bundle.macOS.minimumSystemVersion}`, minOs === CONF.bundle.macOS.minimumSystemVersion, minOs);
 
-  // 7. The sample inside: the three book-notes files are placeholders, and there is no board.json, ledger or notes file.
+  // 7. The sample inside: the three book-notes files are placeholders, there is no board.json or notes file, and its
+  //    ledger is the repository's (0.3.0).
   const sample = path.join(app, 'Contents', 'Resources', 'sample-workspace');
   check('the sample has the three book-notes files as placeholders', () => {
     const books = JSON.parse(fs.readFileSync(path.join(sample, 'library', 'books.json'), 'utf8'));
@@ -86,7 +87,10 @@ try {
     return [notes.length === 3 && placeholders.length === 3, `${placeholders.length} of ${notes.length}`];
   });
   check('the sample has no board.json', !fs.existsSync(path.join(sample, 'board', 'board.json')));
-  check('the sample has no actions/ledger.json', !fs.existsSync(path.join(sample, 'actions', 'ledger.json')));
+  check('the sample has actions/ledger.json, the same as the repository\'s', () => {
+    const shipped = path.join(sample, 'actions', 'ledger.json');
+    return fs.existsSync(shipped) && fs.readFileSync(shipped, 'utf8') === fs.readFileSync(path.join(REPO, 'sample-workspace', 'actions', 'ledger.json'), 'utf8');
+  });
   check('the sample has no notes/notes.json', !fs.existsSync(path.join(sample, 'notes', 'notes.json')));
   // 8. The sample's coach and five agents, and the weekly brief as the last section of its CLAUDE.md (step 10).
   const AGENTS = ['blind-spot-check.md', 'commitment-tracker.md', 'negotiation-prep.md', 'one-on-one-prep.md', 'risk-radar.md'];

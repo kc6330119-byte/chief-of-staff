@@ -1,10 +1,10 @@
 [package]
 name = "chief-of-staff-test-server"
-version = "0.2.0"
+version = "0.3.0"
 edition.workspace = true
 publish.workspace = true
 description = "Loopback HTTP wrapper around the core, used only by the test suite. Never shipped."
 
 [dependencies]
-chief-of-staff-core = { version = "0.2.0", path = "../core" }
+chief-of-staff-core = { version = "0.3.0", path = "../core" }
 tiny_http = "0.12.0"

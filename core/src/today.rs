@@ -7,6 +7,7 @@ use std::cmp::Ordering;
 use serde_json::{json, Map, Value};
 
 use crate::board::{self, Board, Card};
+use crate::briefing::{self, Week};
 use crate::meetings::{days_between, overview, summary_files, today_iso, Meeting};
 use crate::people::{People, Person, FILE as PEOPLE_FILE};
 use crate::paths::Workspace;
@@ -29,9 +30,9 @@ pub(crate) struct Item<'a> {
     /// The owner's Name from people.md, or the owner as written.
     pub owner: Option<String>,
     pub mine: bool,
-    rule: &'a str,
+    pub rule: &'a str,
     /// The day it was first seen: its first meeting, or the day a card of my own was made.
-    since: Option<&'a str>,
+    pub since: Option<&'a str>,
 }
 
 impl Item<'_> {
@@ -209,11 +210,29 @@ fn empty(status: &str, as_of: String, as_of_is_newest: bool, ledger_error: Optio
     json!({
         "status": status, "asOf": as_of, "asOfIsNewestMeeting": as_of_is_newest, "ledgerError": ledger_error,
         "me": null, "meProblem": null, "groups": [], "counts": counts(0, 0, 0, 0), "people": null, "foot": foot, "meetings": [],
+        "briefing": null,
     })
 }
 
-fn view(ws: &Workspace, demo: bool, acted: Option<&str>) -> Result<Value, Error> {
-    if summary_files(ws)?.is_empty() { return Ok(empty("no-summaries", today_iso(), false, None, Value::Null)); }
+/// The briefing for `week` from the Board as it is. Without a readable ledger nothing can be told about what is closed,
+/// so there is none.
+fn briefing_of(ws: &Workspace, b: &Board, week: Week) -> Result<Value, Error> {
+    let people = &b.ov.people;
+    let (me, _) = who_is_me(people);
+    let all = items(b, people, me.as_deref());
+    let confirm = all.iter().filter(|i| CONFIRM_RULES.contains(&i.rule)).count();
+    briefing::build(ws, b, people, me.as_deref(), &all, confirm, week)
+}
+
+fn view(ws: &Workspace, demo: bool, acted: Option<&str>, week: Week) -> Result<Value, Error> {
+    if summary_files(ws)?.is_empty() {
+        let mut out = empty("no-summaries", today_iso(), false, None, Value::Null);
+        out["briefing"] = match ledger::load(ws)? {
+            ledger::Loaded::Unreadable(_) => Value::Null,
+            _ => briefing_of(ws, &board::build(ws, demo)?, week)?,
+        };
+        return Ok(out);
+    }
     if let ledger::Loaded::Unreadable(why) = ledger::load(ws)? {
         // The Meetings page counts the ledger among the things it could not read, and so does the foot.
         let ov = overview(ws, demo)?;
@@ -261,6 +280,7 @@ fn view(ws: &Workspace, demo: bool, acted: Option<&str>) -> Result<Value, Error>
     out.insert("people".into(), people_view);
     out.insert("foot".into(), foot(ws, b.ov.warnings.len()));
     out.insert("meetings".into(), json!(b.ov.meetings.iter().map(|m| json!({ "file": m.file, "date": m.date, "title": m.title })).collect::<Vec<_>>()));
+    out.insert("briefing".into(), briefing::build(ws, &b, people, me.as_deref(), &all, confirm.len(), week)?);
     // After an action: the item as it is now, wherever it is listed, so the page can update its row in place.
     if let Some(id) = acted {
         let item = all.iter().find(|i| i.card.id == id).map(|i| item_json(&b, i));
@@ -269,15 +289,16 @@ fn view(ws: &Workspace, demo: bool, acted: Option<&str>) -> Result<Value, Error>
     Ok(Value::Object(out))
 }
 
-pub fn today_view(ws: &Workspace, demo: bool) -> Result<Value, Error> {
-    view(ws, demo, None)
+/// Today, with the briefing for `week`.
+pub fn today_view(ws: &Workspace, demo: bool, week: Week) -> Result<Value, Error> {
+    view(ws, demo, None, week)
 }
 
 /// The actions on a row: close, reopen, keep (Keep open and Keep closed) and due ({ due }, my due date). Each is one
-/// of the Board's own changes; the answer is the new Today with the item as it is now.
-pub fn act(ws: &Workspace, demo: bool, id: &str, action: &str, input: &Map<String, Value>) -> Result<Value, Error> {
+/// of the Board's own changes; the answer is the new Today, with the briefing for `week`, and the item as it is now.
+pub fn act(ws: &Workspace, demo: bool, id: &str, action: &str, input: &Map<String, Value>, week: Week) -> Result<Value, Error> {
     apply(ws, demo, id, action, input)?;
-    view(ws, demo, Some(id))
+    view(ws, demo, Some(id), week)
 }
 
 /// One action on an item, as Today and a person's page send it.

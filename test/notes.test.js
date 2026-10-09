@@ -562,7 +562,7 @@ describe('where it shows: markers and counts', () => {
     await site.api.deleteNote(n.id);
   });
 
-  test('the People list and Today\'s People rows: how many notes since the last meeting', async () => {
+  test('the People list and the People rows in Today\'s answer: how many notes since the last meeting', async () => {
     const people = await site.api.people();
     const row = (name) => people.groups.flatMap((g) => g.people).find((p) => p.name === name);
     assert.equal(row('Sam Torres').notesSince, 2);
@@ -576,8 +576,6 @@ describe('where it shows: markers and counts', () => {
     assert.match(samRow, /2 notes since the last meeting/);
     const rileyRow = page.el('people-body').innerHTML.split('<li class="today-person').find((r) => r.includes('>Riley Brooks<'));
     assert.doesNotMatch(rileyRow, /notes? since/);
-    const todayPage = await openPage(site, '#/today');
-    assert.match(todayPage.el('today-body').innerHTML.split('id="group-people"')[1], /2 notes since the last meeting/);
   });
 
   test('"1 note since the last meeting" for one', async () => {

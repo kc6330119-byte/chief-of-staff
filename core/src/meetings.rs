@@ -567,8 +567,8 @@ pub fn action_item_owners<'a>(rows: impl Iterator<Item = &'a Value>) -> Vec<Stri
 pub fn meetings_overview(ws: &Workspace, demo: bool) -> Result<Value, Error> {
     let o = overview(ws, demo)?;
     let mut warnings = o.warnings;
-    // A row that is on the Board shows its card's chip, and an item closed in the ledger its "closed" date. A ledger
-    // that can't be read is named, and no chip or date is shown.
+    // A row that is on the Board shows its card's chip and its column, and an item closed in the ledger its "closed"
+    // date. A ledger that can't be read is named, and no chip, column or date is shown.
     let entries = match ledger::load(ws)? {
         ledger::Loaded::Missing => Some(serde_json::Map::new()),
         ledger::Loaded::Ok(l) => Some(l["items"].as_object().cloned().unwrap_or_default()),
@@ -584,6 +584,7 @@ pub fn meetings_overview(ws: &Workspace, demo: bool) -> Result<Value, Error> {
         };
         let mut row = r.json;
         row["closed"] = card.as_ref().map_or(Value::Null, |c| c["closed"].clone());
+        row["column"] = card.as_ref().map_or(Value::Null, |c| c["column"].clone());
         row["chip"] = card.map_or(Value::Null, |c| c["chip"].clone());
         row
     }).collect();
