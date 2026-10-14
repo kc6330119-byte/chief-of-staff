@@ -189,3 +189,19 @@ pub fn agent_summaries(ws: &Workspace) -> Result<Vec<AgentSummary>, Error> {
         AgentSummary { name: c["name"].as_str().unwrap().to_string(), sources_read: sources.is_some(), notes_files }
     }).collect())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The wider summary reader (0.3.1) is not used here: "Last reviewed" reads what it read before.
+    #[test]
+    fn last_reviewed_reads_what_it_read_before() {
+        assert_eq!(parse_reviewed(Some("2026-08-13")).as_deref(), Some("2026-08-13"));
+        assert_eq!(parse_reviewed(Some("Aug 13, 2026")).as_deref(), Some("2026-08-13"));
+        assert_eq!(parse_reviewed(Some("August 13 2026")).as_deref(), Some("2026-08-13"));
+        for v in ["13 August 2026", "13 Aug 2026", "2026-08-13 (approx)", "Aug 13", "2026-02-30", "03/08/2026", "Aug 13, 2026 and Sep 1, 2026"] {
+            assert_eq!(parse_reviewed(Some(v)), None, "{v}");
+        }
+    }
+}

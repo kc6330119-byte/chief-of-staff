@@ -10,11 +10,11 @@ A Rust core reads and writes the files and answers every request. The interface 
 JavaScript inside a native macOS window (the system's own WebKit, through Tauri). There is no server, no
 browser and no network port.
 
-Version 0.3.0, built from Mission Control Native 0.1.1.
+Version 0.3.1, built from Mission Control Native 0.1.1.
 
 ## Download
 
-Download `Chief-of-Staff-for-Managers-0.3.0-universal.dmg` from [the latest release][latest]. It runs on
+Download `Chief-of-Staff-for-Managers-0.3.1-universal.dmg` from [the latest release][latest]. It runs on
 macOS 13 or later, on Apple silicon and Intel Macs.
 
 1. Open the `.dmg`. A window shows the app and a shortcut to Applications.
@@ -135,7 +135,7 @@ and signed in.
 
 | To do this | Type this |
 |---|---|
-| Turn a transcript into a meeting summary | `Review the transcript transcripts/2026-10-05_kevin-sam_1on1.txt` |
+| Turn a transcript into a meeting summary | `Review the transcript transcripts/Riley 1-1 - 20260929.txt` |
 | Prepare before you ask someone for something | `Use the negotiation-prep agent. I want to ask Praveen to run pairing sessions with Riley.` |
 | Check a plan against your own coaching points | `Use the blind-spot-check agent on this plan: <your plan or draft message>` |
 
@@ -153,6 +153,10 @@ app.
 
 The app follows an item by its ID. A row with no ID is shown on Meetings as "no ID" and can't be on the
 Board.
+
+The app reads a date in a summary written Aug 13, 2026, 13 August 2026 or 2026-08-13, but never as 03/08/2026,
+which could mean two different days. When an earlier item's From can't be read, the date in its ID is the day it
+was first seen: A-260813-4 was first seen on Aug 13, 2026.
 
 ### Before you start
 

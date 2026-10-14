@@ -22,10 +22,11 @@ fn month_number(name: &str) -> Option<u32> {
     })
 }
 
-static MONTH_RE: LazyLock<regex::Regex> = LazyLock::new(|| js::re(
-    r"\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sept?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+(\d{1,2})(?:,\s*(\d{4}))?\b",
-    "",
-));
+const MONTH_NAME: &str = r"(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sept?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
+static MONTH_RE: LazyLock<regex::Regex> = LazyLock::new(|| js::re(&format!(r"\b{MONTH_NAME}\.?\s+(\d{{1,2}})(?:,\s*(\d{{4}}))?\b"), ""));
+// Day first: "13 August 2026", "13 Aug 2026", "13 Aug".
+static DAY_FIRST_RE: LazyLock<regex::Regex> = LazyLock::new(|| js::re(&format!(r"\b(\d{{1,2}})\s+{MONTH_NAME}\.?(?:,?\s+(\d{{4}}))?\b"), ""));
+static ISO_RE: LazyLock<fancy_regex::Regex> = LazyLock::new(|| js::fre(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)", ""));
 static CELL_YEAR: LazyLock<regex::Regex> = LazyLock::new(|| js::re(r"\b(20\d\d)\b", ""));
 
 pub fn iso(y: i64, m: u32, d: u32) -> String {
@@ -41,22 +42,45 @@ pub fn days_between(a: &str, b: &str) -> Option<i64> {
     Some(js::date_days(b)? - js::date_days(a)?)
 }
 
-/// All month-day dates in a cell. A date without a year takes the year written elsewhere in the cell,
-/// or else the meeting's year (stepping back a year if that would put it after the meeting). A date
-/// that doesn't exist, such as Feb 30, is left out, so the cell reads as "could not read".
+/// A date written with a month name. Without a year it takes the year written elsewhere in the cell, or else the
+/// meeting's year (stepping back a year if that would put it after the meeting). None when the date doesn't exist.
+fn month_name_date(month: &str, day: &str, year: Option<&str>, cell_year: Option<&str>, meeting_date: &str) -> Option<String> {
+    let name = month.to_lowercase();
+    let month = month_number(js::slice_to(&name, 4)).or_else(|| month_number(js::slice_to(&name, 3)))?;
+    let day: u32 = day.parse().unwrap();
+    if !(1..=31).contains(&day) { return None; }
+    let year_text = year.or(cell_year).map(str::to_string).unwrap_or_else(|| meeting_date.chars().take(4).collect());
+    let y = js::string_to_number(&year_text) as i64;
+    let mut d = iso(y, month, day);
+    if year.is_none() && cell_year.is_none() && d.as_str() > meeting_date { d = iso(y - 1, month, day); }
+    js::is_real_date(&d).then_some(d)
+}
+
+/// All month-day dates in a cell ("Aug 13, 2026", "Aug 13"). A date that doesn't exist, such as Feb 30, is left out,
+/// so the cell reads as "could not read". The agents' "Last reviewed" is read with this alone.
 pub fn parse_dates(text: &str, meeting_date: &str) -> Vec<String> {
     let cell_year = CELL_YEAR.captures(text).map(|c| c[1].to_string());
-    let mut out = Vec::new();
-    for m in MONTH_RE.captures_iter(text) {
-        let name = m[1].to_lowercase();
-        let month = month_number(js::slice_to(&name, 4)).or_else(|| month_number(js::slice_to(&name, 3)));
-        let day: u32 = m[2].parse().unwrap();
-        let Some(month) = month else { continue };
-        if !(1..=31).contains(&day) { continue; }
-        let year_text = m.get(3).map(|y| y.as_str().to_string()).or_else(|| cell_year.clone()).unwrap_or_else(|| meeting_date.chars().take(4).collect());
-        let year: i64 = js::string_to_number(&year_text) as i64;
-        let mut d = iso(year, month, day);
-        if m.get(3).is_none() && cell_year.is_none() && d.as_str() > meeting_date { d = iso(year - 1, month, day); }
+    let mut out: Vec<String> = MONTH_RE.captures_iter(text)
+        .filter_map(|m| month_name_date(&m[1], &m[2], m.get(3).map(|y| y.as_str()), cell_year.as_deref(), meeting_date))
+        .collect();
+    out.sort_by(|a, b| js::cmp_utf16(a, b));
+    out
+}
+
+/// All dates in a summary's cell or header: those parse_dates reads, and also YYYY-MM-DD ("2026-08-13") and day first
+/// ("13 August 2026", "13 Aug"). Where the same month name reads both ways ("1:1 May 5"), the month-first reading is
+/// kept, as before. Dates in numbers alone (03/08/2026, 8/13) are never read: they could mean two different days.
+pub fn parse_summary_dates(text: &str, meeting_date: &str) -> Vec<String> {
+    let cell_year = CELL_YEAR.captures(text).map(|c| c[1].to_string());
+    let month_first: HashSet<usize> = MONTH_RE.captures_iter(text).map(|m| m.get(1).unwrap().start()).collect();
+    let mut out = parse_dates(text, meeting_date);
+    for m in DAY_FIRST_RE.captures_iter(text) {
+        if month_first.contains(&m.get(2).unwrap().start()) { continue; }
+        out.extend(month_name_date(&m[2], &m[1], m.get(3).map(|y| y.as_str()), cell_year.as_deref(), meeting_date));
+    }
+    for m in ISO_RE.captures_iter(text) {
+        let m = m.expect("date pattern");
+        let d = format!("{}-{}-{}", &m[1], &m[2], &m[3]);
         if js::is_real_date(&d) { out.push(d); }
     }
     out.sort_by(|a, b| js::cmp_utf16(a, b));
@@ -213,7 +237,7 @@ pub fn parse_meeting(ws: &Workspace, file: &str) -> Result<Meeting, Error> {
         warn(format!("date {COULD_NOT_READ}: the file name starts with a date that doesn't exist"));
     } else if date.is_none() {
         let d = header_field(&src, "Date");
-        date = d.filter(|d| YEAR.is_match(d)).and_then(|d| parse_dates(&d, "9999-12-31").into_iter().next());
+        date = d.filter(|d| YEAR.is_match(d)).and_then(|d| parse_summary_dates(&d, "9999-12-31").into_iter().next());
         if date.is_none() { warn(format!("date {COULD_NOT_READ}")); }
     }
     let title = TITLE.captures(&src).map(|c| js::trim(&c[1]).to_string()).filter(|t| !t.is_empty());
@@ -470,7 +494,9 @@ pub fn build_tracked(meetings: &[Meeting], people: &People, as_of: &str) -> (Vec
                     format!("ID {id} matches no action item in an earlier meeting")
                 });
             }
-            let origin = parse_dates(&plain_text(&o.from), &date).into_iter().next();
+            // A well-formed ID holds the date of the meeting the item came from, so a "From" that can't be read loses nothing.
+            let origin = parse_summary_dates(&plain_text(&o.from), &date).into_iter().next()
+                .or_else(|| o.id.as_deref().and_then(id_date).filter(|d| js::is_real_date(d)));
             // A row with no ID is background, not an action item: its "From" is shown as written, and a date that
             // can't be read from it is not a problem. A date that can be read still orders the table and gives the age.
             let background = o.id.is_none();
@@ -597,4 +623,41 @@ pub fn meetings_overview(ws: &Workspace, demo: bool) -> Result<Value, Error> {
         "peopleFile": { "file": PEOPLE_FILE, "fileFound": o.people.found },
         "warnings": warnings,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_summary_date_reads_iso_and_day_first_as_well() {
+        for text in ["2026-08-13", "13 August 2026", "13 Aug 2026", "13 Aug", "Aug 13, 2026", "Aug 13", "13 Aug. 2026"] {
+            assert_eq!(parse_summary_dates(text, "2026-10-12"), ["2026-08-13"], "{text}");
+        }
+        // Without a year, a day-first date takes the cell's year, or the meeting's, stepping back past the meeting.
+        assert_eq!(parse_summary_dates("13 Dec", "2026-10-12"), ["2025-12-13"]);
+        assert_eq!(parse_summary_dates("13 Aug (Riley 1:1, 2025)", "2026-10-12"), ["2025-08-13"]);
+        assert_eq!(parse_summary_dates("2026-08-13_riley-1-1.md", "2026-10-12"), ["2026-08-13"]);
+    }
+
+    #[test]
+    fn a_date_that_reads_two_ways_or_does_not_exist_is_not_read() {
+        for text in ["03/08/2026", "8/13", "8/13/2026", "2026-02-30", "30 Feb 2026", "2026-13-08", "12026-08-13", "2026-08-130", "earlier"] {
+            assert_eq!(parse_summary_dates(text, "2026-10-12"), Vec::<String>::new(), "{text}");
+        }
+    }
+
+    #[test]
+    fn a_month_name_between_two_numbers_keeps_its_month_first_reading() {
+        assert_eq!(parse_summary_dates("Sam 1:1 May 5", "2026-10-12"), ["2026-05-05"]);
+        assert_eq!(parse_summary_dates("Praveen 1:1 Jul 28; Sep 8", "2026-10-12"), ["2026-07-28", "2026-09-08"]);
+    }
+
+    #[test]
+    fn the_month_first_reader_is_unchanged() {
+        assert_eq!(parse_dates("Aug 13, 2026", "9999-12-31"), ["2026-08-13"]);
+        for text in ["2026-08-13", "13 August 2026", "13 Aug"] {
+            assert_eq!(parse_dates(text, "9999-12-31"), Vec::<String>::new(), "{text}");
+        }
+    }
 }

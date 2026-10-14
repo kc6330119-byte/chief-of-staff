@@ -254,6 +254,10 @@ The app could not read a table, a field or a date reliably, so it shows "could n
 instead of guessing. To see why, open the line at the top of the page that says how many things could not
 be read. It lists each file and the reason. On Today, the last line says how many and links to Meetings.
 
+A date in a summary is read when it is written Aug 13, 2026, 13 August 2026 or 2026-08-13, but never as
+03/08/2026, which could mean two different days. When an earlier item's From can't be read, the date in its
+ID is used as the day it was first seen: A-260813-4 was first seen on Aug 13, 2026.
+
 ### What does "Suggested" mean?
 
 The coach marks anything that was not said in the meeting as "(suggested)". The app keeps these items
