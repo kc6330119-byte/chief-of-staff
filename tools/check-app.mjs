@@ -19,6 +19,9 @@
 //   - Agents shows the coach and every agent file (five in the sample); each card's rules start closed behind
 //     "Rules (N)", a click opens one card and leaves the others closed, and all are closed again after a page load;
 //     screenshots of the page with every card closed and with one open
+//   - Meetings (0.3.2): the warnings are grouped by kind, most first, each with its count, and each group opens to its
+//     files; the counts add up to the total in the first line, which is the core's count and Today's last line;
+//     a screenshot with every group open
 //   - the edit button is a pencil in the text colour, a meeting's tables fill their block, and a date in the Meetings
 //     table never wraps
 //   - no listening port or socket for the app's process, every page loads, the Board shows the action items with
@@ -420,6 +423,14 @@ const checklist = {
   'Today: a meeting link\'s date never breaks ("Sep 15" stays on one line), at 1440 px and at 1100 px wide, in the session\'s workspace and on the sample': verdict(
     ['session', 'briefing'].every((run) => [1440, 1100].every((w) => ev('today-layout', run).some((x) => Math.abs(x.width - w) <= 1
       && x.meetingDates.count > 0 && x.meetingDates.wrapped.length === 0)))),
+  'Meetings: the warnings are grouped by kind with their counts, most first, and each group opens to its files; the total is the core\'s and Today\'s': verdict((() => {
+    const w = one('meetings-warnings', 'session');
+    if (!w?.panel || !w.groups?.length) return false;
+    const counts = w.groups.map((g) => g.count);
+    return w.total === w.warnings && w.total === w.todayFoot && counts.reduce((a, b) => a + b, 0) === w.total
+      && counts.every((c, i) => i === 0 || counts[i - 1] >= c) && new Set(w.groups.map((g) => g.kind)).size === w.groups.length
+      && w.groups.every((g) => g.open && g.kind && g.files.length === g.count && g.files.every((f) => f.length > 0));
+  })()),
   'Today: the activity chart draws 6 weeks and 18 points, each labelled with its value': verdict(
     briefing?.chart.weeks.join() === 'Aug 17,Aug 24,Aug 31,Sep 7,Sep 14,Sep 21' && briefing.chart.points === 18 && briefing.chart.labelled === 18),
   'Today: Search finds Riley among the action items, the meetings and the people, and Escape clears it': verdict(
@@ -549,6 +560,7 @@ const report = {
     todayClosed: one('today-closed'),
     editButtons: ev('edit-buttons'),
     meetingTables: ev('meeting-tables'),
+    meetingsWarnings: one('meetings-warnings'),
     opensOn: one('ready'),
     boardLayout: ev('board-layout'),
     cardEdited: one('card-edited'),

@@ -344,11 +344,18 @@ pub fn split_lines(src: &str) -> Vec<&str> {
 static H2: LazyLock<regex::Regex> = LazyLock::new(|| js::re(r"^##\s+", ""));
 static H12: LazyLock<regex::Regex> = LazyLock::new(|| js::re(r"^#{1,2}\s+", ""));
 
-/// The lines of a "## Heading" section, up to the next level-2 (or higher) heading.
+/// A "## Heading"'s name as it is matched: in any capitals, and without a colon at its end.
+fn heading_key(text: &str) -> String {
+    let t = js::trim(text);
+    js::trim(t.strip_suffix(':').unwrap_or(t)).to_lowercase()
+}
+
+/// The lines of a "## Heading" section, up to the next level-2 (or higher) heading. The heading is matched in any
+/// capitals and with or without a colon at its end ("## action items:").
 pub fn section_lines<'a>(src: &'a str, heading: &str) -> Option<Vec<&'a str>> {
     let lines = split_lines(src);
-    let want = heading.to_lowercase();
-    let start = lines.iter().position(|l| H2.is_match(l) && js::trim(&H2.replace(l, "")).to_lowercase() == want)?;
+    let want = heading_key(heading);
+    let start = lines.iter().position(|l| H2.is_match(l) && heading_key(&H2.replace(l, "")) == want)?;
     let end = lines.iter().enumerate().position(|(i, l)| i > start && H12.is_match(l)).unwrap_or(lines.len());
     Some(lines[start + 1..end].to_vec())
 }
@@ -444,6 +451,15 @@ mod tests {
         assert_eq!(render_inline("1. first"), "1. first");
         assert_eq!(render_inline("# not a heading"), "# not a heading");
         assert_eq!(render_inline("**bold** <i>x</i>"), "<strong>bold</strong> &lt;i&gt;x&lt;/i&gt;");
+    }
+
+    #[test]
+    fn a_section_heading_is_matched_in_any_capitals_and_with_a_colon() {
+        for src in ["## Action Items\nx\n## Next", "## action items:\nx\n## Next", "## ACTION ITEMS :\nx\n## Next", "##  Action Items: \nx\n## Next"] {
+            assert_eq!(section_lines(src, "Action Items"), Some(vec!["x"]), "{src}");
+        }
+        assert_eq!(section_lines("## Next steps\nx\n", "Action Items"), None);
+        assert_eq!(section_lines("## Action Items::\nx\n", "Action Items"), None);
     }
 
     #[test]

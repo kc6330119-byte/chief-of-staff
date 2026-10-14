@@ -56,6 +56,33 @@
     }
     return null;
   };
+  // Meetings' warnings (0.3.2): the panel and every group are opened as a person opens them, by clicking their
+  // summaries; each group's count, kind and the files it shows are read, with the total in the first line, the
+  // warnings the core gives and Today's last line; a screenshot is taken open, and all is closed again.
+  const meetingsWarnings = async () => {
+    const warnings = (await json('/api/meetings')).warnings.length;
+    const todayFoot = (await json('/api/today')).foot?.couldNotRead ?? null;
+    const panel = document.getElementById('meetings-warnings');
+    if (!panel) return { panel: false, warnings, todayFoot };
+    panel.querySelector(':scope > summary').click();
+    await sleep(100);
+    const details = [...panel.querySelectorAll('details.warning-group')];
+    for (const g of details) g.querySelector(':scope > summary').click();
+    await sleep(300);
+    const groups = details.map((g) => ({
+      count: Number(g.querySelector('.warning-count')?.textContent),
+      kind: g.querySelector(':scope > summary').textContent.replace(/^\s*\d+\s*/, '').trim(),
+      open: g.open,
+      files: [...g.querySelectorAll(':scope > ul > li > code')].filter((c) => c.getClientRects().length > 0).map((c) => c.textContent),
+    }));
+    const total = Number(panel.querySelector(':scope > summary strong')?.textContent.match(/^\d+/)?.[0]);
+    const result = { panel: panel.open, total, warnings, todayFoot, groups };
+    await shot('meetings-warnings');
+    for (const g of details) g.open = false;
+    panel.open = false;
+    await sleep(100);
+    return result;
+  };
   const switchState = () => ({ on: document.getElementById('private-switch')?.checked ?? null, privateNotesShown: app.querySelectorAll('.private-note').length });
 
   // The window's inner width, set through the app (the page can't resize its own window).
@@ -437,6 +464,7 @@
           // An age and an ID in the tracked table are each one line. Boxes are counted by the lines they sit on,
           // so a span on one line is not mistaken for a wrap.
           if (name === 'meetings') {
+            if (width === 1440) await report('meetings-warnings', await meetingsWarnings());
             const cells = [...app.querySelectorAll('#tracked-body td.num')];
             const ids = [...app.querySelectorAll('#tracked-body td.id')];
             if (width === 1440) await report('age-cells', { count: cells.length, wrapped: cells.filter((td) => lines(td) > 1).map((td) => td.textContent), windowWidth: window.innerWidth });

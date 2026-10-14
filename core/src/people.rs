@@ -41,22 +41,22 @@ pub fn load_people(ws: &Workspace) -> Result<People, Error> {
     if !ws.exists(FILE)? { return Ok(People { found: false, people: Vec::new(), warnings: Vec::new() }); }
     let src = ws.read_text(FILE)?;
     let mut warnings = Vec::new();
-    let mut warn = |message: String| warnings.push(Warning { file: FILE.to_string(), message });
+    let mut warn = |w: Warning| warnings.push(w);
     let mut people = Vec::new();
     match parse_table(&split_lines(&src)) {
-        None => warn(format!("the table {COULD_NOT_READ}")),
+        None => warn(Warning::new(FILE, format!("the table {COULD_NOT_READ}"))),
         Some(table) => {
             let missing: Vec<&str> = COLUMNS.into_iter().filter(|h| !table.header.iter().any(|x| x == h)).collect();
             if !missing.is_empty() {
-                warn(format!("the table {COULD_NOT_READ}: missing column {}", missing.join(", ")));
+                warn(Warning::new(FILE, format!("the table {COULD_NOT_READ}: missing column {}", missing.join(", "))));
             } else {
-                for l in &table.bad { warn(format!("row {COULD_NOT_READ}: {}…", js::slice_to(l, 80))); }
+                for l in &table.bad { warn(Warning::varied(FILE, &format!("row {COULD_NOT_READ}: {{}}…"), &[js::slice_to(l, 80)])); }
                 for r in &table.rows {
                     let name = cell(r, "Name");
-                    if name.is_empty() { warn("a row has no Name".to_string()); continue; }
+                    if name.is_empty() { warn(Warning::new(FILE, "a row has no Name")); continue; }
                     let relationship = cell(r, "Relationship");
                     if !RELATIONSHIPS.contains(&relationship.to_lowercase().as_str()) {
-                        warn(format!("the relationship \"{relationship}\" of {name} is not one of {}", RELATIONSHIPS.join(", ")));
+                        warn(Warning::varied(FILE, &format!("the relationship \"{{}}\" of {{}} is not one of {}", RELATIONSHIPS.join(", ")), &[&relationship, &name]));
                     }
                     let also_called = cell(r, "Also called").split(',').map(|a| js::trim(a).to_string()).filter(|a| !a.is_empty()).collect();
                     people.push(Person { name, role: cell(r, "Role"), relationship, also_called });
@@ -69,13 +69,13 @@ pub fn load_people(ws: &Workspace) -> Result<People, Error> {
     for p in &people {
         for n in std::iter::once(&p.name).chain(&p.also_called) {
             match seen.get(n.as_str()) {
-                Some(other) if *other != p.name => warn(format!("\"{n}\" stands for both {other} and {}", p.name)),
+                Some(other) if *other != p.name => warn(Warning::varied(FILE, "\"{}\" stands for both {} and {}", &[n, other, &p.name])),
                 _ => { seen.insert(n, &p.name); }
             }
         }
     }
     let me = people.iter().filter(|p| p.relationship.eq_ignore_ascii_case("me")).count();
-    if me == 0 { warn("no row has the relationship \"me\"; exactly one should".to_string()); }
-    if me > 1 { warn(format!("{me} rows have the relationship \"me\"; exactly one should")); }
+    if me == 0 { warn(Warning::new(FILE, "no row has the relationship \"me\"; exactly one should")); }
+    if me > 1 { warn(Warning::varied(FILE, "{} rows have the relationship \"me\"; exactly one should", &[&me.to_string()])); }
     Ok(People { found: true, people, warnings })
 }

@@ -89,9 +89,9 @@ pub fn parse_summary_dates(text: &str, meeting_date: &str) -> Vec<String> {
 
 // ---------- one meeting ----------
 
+/// A header field's value, read as the meeting page reads it: the first field of that name in the file.
 fn header_field(src: &str, name: &str) -> Option<String> {
-    let re = js::re(&format!(r"\*\*{}:\*\*\s*([^\n|]+)", regex::escape(name)), "");
-    re.captures(src).map(|c| js::trim(&c[1]).to_string())
+    file_fields(&split_lines(src)).1.into_iter().find(|(n, _)| n == name).map(|(_, v)| v)
 }
 
 fn split_top_level(s: &str) -> Vec<String> {
@@ -118,8 +118,10 @@ pub fn owner_names(owner: &str) -> Vec<String> {
         .collect()
 }
 
-// Header lines such as "**Date:** May 5, 2026 | **Duration:** 4m 12s", before the first section.
+// Header lines such as "**Date:** May 5, 2026 | **Duration:** 4m 12s", before the first "##" heading or "---" line.
 const HEADER_FIELDS: [&str; 6] = ["Date", "Duration", "Attendees", "Company", "Type", "Prior context"];
+/// Other names a summary gives a field, read as that field.
+const FIELD_SYNONYMS: [(&str, &str); 2] = [("participants", "Attendees"), ("meeting type", "Type")];
 pub const FIELDS_PLACEHOLDER: &str = "MCHEADERFIELDS";
 
 pub struct HeaderField {
@@ -133,24 +135,64 @@ pub struct Header {
     pub body: String,
 }
 
-pub fn extract_header_fields(src: &str) -> Header {
+/// The field a name stands for, in any capitals: one of HEADER_FIELDS or a synonym of one.
+fn known_field(name: &str) -> Option<&'static str> {
+    let name = name.to_lowercase();
+    HEADER_FIELDS.into_iter().find(|f| f.to_lowercase() == name)
+        .or_else(|| FIELD_SYNONYMS.iter().find(|(s, _)| *s == name).map(|(_, f)| *f))
+}
+
+// A field is written **Name:**, **Name**: or, for a field the app reads, plain Name:, in any capitals. A bold field the
+// app reads is found anywhere in the file, as 0.3.1 found it; a plain one only on a field line in the header.
+const KNOWN_NAMES: &str = "date|duration|attendees|company|type|prior context|participants|meeting type";
+static BOLD_FIELD: LazyLock<regex::Regex> = LazyLock::new(|| js::re(r"^\*\*([^*]+?)(?::\*\*|\*\*:)\s*(.*)$", ""));
+static PLAIN_FIELD: LazyLock<regex::Regex> = LazyLock::new(|| js::re(&format!(r"^({KNOWN_NAMES}):\s*(.*)$"), "i"));
+// Elsewhere, a bold field the app reads anywhere in a line; its value runs to the end of the line or to a "|".
+static BOLD_ANYWHERE: LazyLock<regex::Regex> = LazyLock::new(|| js::re(&format!(r"\*\*({KNOWN_NAMES})(?::\*\*|\*\*:)[ \t]*([^\n|]*)"), "i"));
+// More fields can follow on the same line after " | ".
+static FIELD_SPLIT: LazyLock<fancy_regex::Regex> = LazyLock::new(|| js::fre(&format!(r"\s+\|\s+(?=\*\*[^*]+(?::\*\*|\*\*:)|(?i:{KNOWN_NAMES}):)"), ""));
+
+/// One field: its name (a field the app reads by its own name) and its value.
+fn read_field(seg: &str) -> Option<(String, String)> {
+    let (name, value) = BOLD_FIELD.captures(seg).or_else(|| PLAIN_FIELD.captures(seg)).map(|m| (js::trim(&m[1]).to_string(), js::trim(&m[2]).to_string()))?;
+    Some((known_field(&name).map(str::to_string).unwrap_or(name), value))
+}
+
+/// For each line, its fields if it is a field line in the header (one that starts with a field), else None.
+fn header_lines(lines: &[&str]) -> Vec<Option<Vec<(String, String)>>> {
     static END: LazyLock<regex::Regex> = LazyLock::new(|| js::re(r"^(##\s|---\s*$)", ""));
-    static FIELD_LINE: LazyLock<regex::Regex> = LazyLock::new(|| js::re(r"^\*\*[^*]+:\*\*", ""));
-    static SEG_SPLIT: LazyLock<fancy_regex::Regex> = LazyLock::new(|| js::fre(r"\s+\|\s+(?=\*\*[^*]+:\*\*)", ""));
-    static SEG: LazyLock<regex::Regex> = LazyLock::new(|| js::re(r"^\*\*([^*]+):\*\*\s*(.*)$", ""));
+    let end = lines.iter().position(|l| END.is_match(l)).unwrap_or(lines.len());
+    lines.iter().enumerate().map(|(i, line)| {
+        if i >= end || read_field(line).is_none() { return None; }
+        Some(FIELD_SPLIT.split(line).filter_map(|seg| read_field(seg.expect("split"))).collect())
+    }).collect()
+}
+
+/// Every field in the file, in order, and for each line whether it is a field line in the header. A field line's
+/// fields are read in any form and by any name; on every other line, only the bold fields the app reads.
+fn file_fields(lines: &[&str]) -> (Vec<bool>, Vec<(String, String)>) {
+    let mut field_line = Vec::new();
+    let mut fields = Vec::new();
+    for (line, read) in lines.iter().zip(header_lines(lines)) {
+        field_line.push(read.is_some());
+        match read {
+            Some(read) => fields.extend(read),
+            None => fields.extend(BOLD_ANYWHERE.captures_iter(line)
+                .map(|m| (known_field(&m[1]).expect("a known name").to_string(), js::trim(&m[2]).to_string()))),
+        }
+    }
+    (field_line, fields)
+}
+
+pub fn extract_header_fields(src: &str) -> Header {
     let lines = split_lines(src);
-    let end = lines.iter().position(|l| END.is_match(l));
-    let mut fields: Vec<(String, String)> = Vec::new();
+    let (field_line, fields) = file_fields(&lines);
     let mut placed = false;
     let mut body = Vec::new();
-    for (i, line) in lines.iter().enumerate() {
-        if end.is_none_or(|e| i < e) && FIELD_LINE.is_match(line) {
-            for seg in SEG_SPLIT.split(line) {
-                let seg = seg.expect("split");
-                if let Some(m) = SEG.captures(seg) {
-                    fields.push((js::trim(&m[1]).to_string(), js::trim(&m[2]).to_string()));
-                }
-            }
+    // Only the header's field lines are shown as fields in place of the lines; a bold field further down stays
+    // where it is written, and also gives its value to the fields.
+    for (line, is_field_line) in lines.iter().zip(field_line) {
+        if is_field_line {
             if !placed { body.push(FIELDS_PLACEHOLDER.to_string()); placed = true; }
             continue;
         }
@@ -200,18 +242,18 @@ pub struct Meeting {
 }
 
 /// The rows of the first table under `heading`, with its column names; None when there is no such section.
-fn read_table(src: &str, heading: &str, required: &[&str], warn: &mut dyn FnMut(String)) -> Option<(Vec<String>, Vec<Row>)> {
+fn read_table(src: &str, heading: &str, required: &[&str], warn: &mut dyn FnMut(&str, &[&str])) -> Option<(Vec<String>, Vec<Row>)> {
     let lines = section_lines(src, heading)?;
     let Some(table) = parse_table(&lines) else {
-        warn(format!("\"{heading}\" table {COULD_NOT_READ}"));
+        warn(&format!("\"{heading}\" table {COULD_NOT_READ}"), &[]);
         return Some((Vec::new(), Vec::new()));
     };
     let missing: Vec<&str> = required.iter().copied().filter(|h| !table.header.iter().any(|x| x == h)).collect();
     if !missing.is_empty() {
-        warn(format!("\"{heading}\" table {COULD_NOT_READ}: missing column {}", missing.join(", ")));
+        warn(&format!("\"{heading}\" table {COULD_NOT_READ}: missing column {}", missing.join(", ")), &[]);
         return Some((table.header, Vec::new()));
     }
-    for l in &table.bad { warn(format!("\"{heading}\" row {COULD_NOT_READ}: {}…", js::slice_to(l, 80))); }
+    for l in &table.bad { warn(&format!("\"{heading}\" row {COULD_NOT_READ}: {{}}…"), &[js::slice_to(l, 80)]); }
     Some((table.header, table.rows))
 }
 
@@ -226,7 +268,9 @@ pub fn parse_meeting(ws: &Workspace, file: &str) -> Result<Meeting, Error> {
     static TITLE: LazyLock<regex::Regex> = LazyLock::new(|| js::re(r"^#\s+(.+)$", "m"));
     let src = ws.read_text(&format!("{MEETINGS_DIR}/{file}"))?;
     let mut warnings = Vec::new();
-    let mut warn = |message: String| warnings.push(Warning { file: file.to_string(), message });
+    // A message, or a template whose "{}" are filled with the parts that vary (see Warning::varied).
+    let mut warn = |template: &str, parts: &[&str]| warnings.push(
+        if parts.is_empty() { Warning::new(file, template) } else { Warning::varied(file, template, parts) });
 
     let file_date = FILE_DATE.captures(file).map(|c| c[1].to_string());
     // A file name that starts with an impossible date (2026-02-30_...) has no date: the name and the
@@ -234,25 +278,25 @@ pub fn parse_meeting(ws: &Workspace, file: &str) -> Result<Meeting, Error> {
     let impossible_name = file_date.as_deref().is_some_and(|d| !js::is_real_date(d));
     let mut date = file_date.filter(|_| !impossible_name);
     if impossible_name {
-        warn(format!("date {COULD_NOT_READ}: the file name starts with a date that doesn't exist"));
+        warn(&format!("date {COULD_NOT_READ}: the file name starts with a date that doesn't exist"), &[]);
     } else if date.is_none() {
         let d = header_field(&src, "Date");
         date = d.filter(|d| YEAR.is_match(d)).and_then(|d| parse_summary_dates(&d, "9999-12-31").into_iter().next());
-        if date.is_none() { warn(format!("date {COULD_NOT_READ}")); }
+        if date.is_none() { warn(&format!("date {COULD_NOT_READ}"), &[]); }
     }
     let title = TITLE.captures(&src).map(|c| js::trim(&c[1]).to_string()).filter(|t| !t.is_empty());
     let attendees = header_field(&src, "Attendees").filter(|a| !a.is_empty());
     let kind = header_field(&src, "Type").filter(|t| !t.is_empty());
-    if attendees.is_none() { warn(format!("attendees {COULD_NOT_READ}")); }
-    if kind.is_none() { warn(format!("meeting type {COULD_NOT_READ}")); }
+    if attendees.is_none() { warn(&format!("attendees {COULD_NOT_READ}"), &[]); }
+    if kind.is_none() { warn(&format!("meeting type {COULD_NOT_READ}"), &[]); }
 
     // The new format has an ID column; the old one a "#" column, whose rows have no ID. Either is read.
     let action_table = read_table(&src, "Action Items", &["Action Item", "Owner", "Status"], &mut warn);
-    if action_table.is_none() { warn("no \"Action Items\" section".to_string()); }
+    if action_table.is_none() { warn("no \"Action Items\" section", &[]); }
     let (action_header, action_rows) = action_table.unwrap_or_default();
     let new_format = action_header.iter().any(|h| h == "ID");
     if !new_format && !action_rows.is_empty() && !action_header.iter().any(|h| h == "#") {
-        warn(format!("\"Action Items\" table {COULD_NOT_READ}: missing column ID"));
+        warn(&format!("\"Action Items\" table {COULD_NOT_READ}: missing column ID"), &[]);
     }
     let (_, open_rows) = read_table(&src, "Open Items from Earlier Meetings", &["From", "Item", "Owner", "Status now"], &mut warn).unwrap_or_default();
 
@@ -265,7 +309,7 @@ pub fn parse_meeting(ws: &Workspace, file: &str) -> Result<Meeting, Error> {
                 let raw = r.get("#").unwrap_or("");
                 let num = js::string_to_number(&plain_text(raw));
                 if !(num.is_finite() && num.fract() == 0.0 && num >= 1.0) {
-                    warn(format!("action item number {COULD_NOT_READ}: \"{raw}\""));
+                    warn(&format!("action item number {COULD_NOT_READ}: \"{{}}\""), &[raw]);
                     continue;
                 }
                 num
@@ -338,16 +382,32 @@ fn id_date(id: &str) -> Option<String> {
     SHAPE.captures(id).map(|c| format!("20{}-{}-{}", &c[1], &c[2], &c[3]))
 }
 
-/// The state a "Status now" names with its first word, or None when it starts with none of the three.
+/// The words a "Status now" may start with, in any capitals, and the state each names.
+const STATUS_WORDS: [(&str, &str); 18] = [
+    ("Open", "open"), ("In progress", "open"), ("Ongoing", "open"), ("Pending", "open"), ("Still open", "open"),
+    ("Not started", "open"), ("Blocked", "open"), ("Partially", "open"),
+    ("Done", "done"), ("Closed", "done"), ("Completed", "done"), ("Complete", "done"), ("Resolved", "done"), ("Finished", "done"),
+    ("Dropped", "dropped"), ("Cancelled", "dropped"), ("Canceled", "dropped"), ("Abandoned", "dropped"),
+];
+
+/// The state a "Status now" names with its first word or words, or None when it starts with none of STATUS_WORDS.
 fn status_state(status: &str) -> Option<&'static str> {
     let text = plain_text(status);
-    let word: String = js::trim(&text).chars().take_while(|c| c.is_alphabetic()).collect();
-    match word.to_lowercase().as_str() {
-        "open" => Some("open"),
-        "done" => Some("done"),
-        "dropped" => Some("dropped"),
-        _ => None,
-    }
+    let text = js::trim(&text);
+    // The first two words, each a run of letters; the second only when a space alone comes between them.
+    let first: String = text.chars().take_while(|c| c.is_alphabetic()).collect();
+    let rest = &text[first.len()..];
+    let second: String = rest.trim_start_matches(js::is_ws).chars().take_while(|c| c.is_alphabetic()).collect();
+    let two = (rest.starts_with(js::is_ws) && !second.is_empty()).then(|| format!("{first} {second}"));
+    STATUS_WORDS.iter()
+        .find(|(w, _)| w.eq_ignore_ascii_case(&first) || two.as_ref().is_some_and(|t| w.eq_ignore_ascii_case(t)))
+        .map(|(_, state)| *state)
+}
+
+/// The words a "Status now" may start with, as a warning lists them: "Open, In progress, … or Abandoned".
+fn status_words_text() -> String {
+    let words: Vec<&str> = STATUS_WORDS.iter().map(|(w, _)| *w).collect();
+    format!("{} or {}", words[..words.len() - 1].join(", "), words[words.len() - 1])
 }
 
 struct Mention {
@@ -388,19 +448,23 @@ struct Tracked {
     order: usize,
     usable: bool,
     mentions: Vec<Mention>,
-    /// Each problem with the file it was found in.
-    problems: Vec<(String, String)>,
+    /// An earlier item whose ID names a meeting from before the oldest summary: it has no action item to match.
+    before_first: bool,
+    /// Each problem, with the file it was found in.
+    problems: Vec<Warning>,
 }
 
 /// Every Action Items row is listed. A row whose ID is well formed and used once in the workspace is tracked:
 /// a row under "Open Items from Earlier Meetings" in a later meeting with the same ID is a later mention of it,
 /// and the last mention is its latest status. Nothing is matched by wording. Earlier-items rows without an ID
 /// (a repeated concern, something from outside these meetings) and rows whose ID matches no item are listed
-/// on their own. Anything that doesn't fit the format is reported, never guessed.
+/// on their own; rows whose ID names a meeting from before the oldest summary are one row per ID, as that
+/// meeting isn't here to give them an action item. Anything that doesn't fit the format is reported, never guessed.
 pub fn build_tracked(meetings: &[Meeting], people: &People, as_of: &str) -> (Vec<TrackedRow>, Vec<Warning>) {
     let mut chrono: Vec<&Meeting> = meetings.iter().filter(|m| m.date.is_some()).collect();
     chrono.sort_by(|a, b| js::locale_compare(a.date.as_deref().unwrap(), b.date.as_deref().unwrap(), false).then_with(|| js::locale_compare(&a.file, &b.file, false)));
     let mut warnings = Vec::new();
+    let oldest = chrono.first().and_then(|m| m.date.clone());
 
     // How often each well-formed ID is given to an action item. An ID used twice can't say which item it means.
     let mut uses: HashMap<String, usize> = HashMap::new();
@@ -417,43 +481,45 @@ pub fn build_tracked(meetings: &[Meeting], people: &People, as_of: &str) -> (Vec
             let n = m.action_items.len();
             let message = if n == 1 { "1 Action Items row has no ID, so it is not tracked across meetings".to_string() }
                 else { format!("{n} Action Items rows have no ID, so they are not tracked across meetings") };
-            warnings.push(Warning { file: m.file.clone(), message });
+            warnings.push(Warning { file: m.file.clone(), message, kind: Some("… Action Items rows have no ID, so they are not tracked across meetings".into()) });
         }
         for a in &m.action_items {
             let mut problems = Vec::new();
-            let label = a.id.clone().unwrap_or_else(|| format!("Action Items row {}", js::number_to_string(a.num)));
+            let mut problem = |template: &str, parts: &[&str]| problems.push(Warning::varied(&m.file, template, parts));
+            let num = js::number_to_string(a.num);
+            let label = a.id.clone().unwrap_or_else(|| format!("Action Items row {num}"));
             let mut tracked = false;
             match &a.id {
                 None if !m.has_ids => {}
-                None => problems.push(format!("{label} has no ID, so it is not tracked across meetings")),
+                None => problem("Action Items row {} has no ID, so it is not tracked across meetings", &[&num]),
                 Some(id) => match id_date(id) {
-                    None => problems.push(format!("ID \"{id}\" is not in the form A-YYMMDD-n")),
+                    None => problem("ID \"{}\" is not in the form A-YYMMDD-n", &[id]),
                     Some(d) => {
-                        if d != date { problems.push(format!("ID {id}: its date is not the meeting's date, {date}")); }
-                        if uses[id] > 1 { problems.push(format!("ID {id} is used more than once in this workspace")); } else { tracked = true; }
+                        if d != date { problem("ID {}: its date is not the meeting's date, {}", &[id, &date]); }
+                        if uses[id] > 1 { problem("ID {} is used more than once in this workspace", &[id]); } else { tracked = true; }
                     }
                 },
             }
             let due_date = match &a.due_date {
                 Some(d) if js::is_real_date(d) => Some(d.clone()),
-                Some(d) => { problems.push(format!("{label}: Due date \"{d}\" is not a real date written YYYY-MM-DD")); None }
+                Some(d) => { problem("{}: Due date \"{}\" is not a real date written YYYY-MM-DD", &[&label, d]); None }
                 None => None,
             };
             let written = js::trim(&plain_text(&a.owner)).to_string();
             let owner = if written.is_empty() {
-                problems.push(format!("{label} has no owner"));
+                problem("{} has no owner", &[&label]);
                 written
             } else if people.found {
                 match people.resolve(&written) {
                     Some(name) => name.to_string(),
-                    None => { problems.push(format!("{label}: the owner \"{written}\" is not in people.md")); written }
+                    None => { problem("{}: the owner \"{}\" is not in people.md", &[&label, &written]); written }
                 }
             } else {
                 written
             };
             if tracked { by_id.insert(a.id.clone().unwrap(), items.len()); }
             items.push(Tracked {
-                key: format!("{}#{}", m.file, js::number_to_string(a.num)),
+                key: format!("{}#{}", m.file, num),
                 id: a.id.clone(),
                 kind: "action item",
                 text: a.text.clone(),
@@ -466,33 +532,43 @@ pub fn build_tracked(meetings: &[Meeting], people: &People, as_of: &str) -> (Vec
                 order,
                 usable: tracked,
                 mentions: vec![Mention { file: m.file.clone(), date: date.clone(), status: a.status.clone(), kind: "action item" }],
-                problems: problems.into_iter().map(|p| (m.file.clone(), p)).collect(),
+                before_first: false,
+                problems,
             });
         }
     }
 
+    // Earlier items whose ID names a meeting from before the oldest summary, by ID: each is one row.
+    let mut before_first: HashMap<String, usize> = HashMap::new();
+    let status_template = format!("{{}}: \"Status now\" starts with none of {}, so it counts as open", status_words_text());
     for (order, m) in chrono.iter().enumerate() {
         let date = m.date.clone().unwrap();
         for (oi, o) in m.open_items.iter().enumerate() {
             let label = o.id.clone().unwrap_or_else(|| format!("\"{}\"", js::slice_to(&plain_text(&o.text), 60)));
             let mut problems = Vec::new();
-            if status_state(&o.status).is_none() {
-                problems.push(format!("{label}: \"Status now\" starts with none of Open, Done or Dropped, so it counts as open"));
-            }
+            if status_state(&o.status).is_none() { problems.push(Warning::varied(&m.file, &status_template, &[&label])); }
             let mention = Mention { file: m.file.clone(), date: date.clone(), status: o.status.clone(), kind: "earlier item" };
+            let mut from_before_first = false;
             if let Some(id) = &o.id {
-                if let Some(&i) = by_id.get(id).filter(|&&i| items[i].order < order) {
+                let earlier = by_id.get(id).filter(|&&i| items[i].order < order).or_else(|| before_first.get(id));
+                if let Some(&i) = earlier {
                     items[i].mentions.push(mention);
-                    items[i].problems.extend(problems.into_iter().map(|p| (m.file.clone(), p)));
+                    items[i].problems.extend(problems);
                     continue;
                 }
-                problems.insert(0, if id_date(id).is_none() {
-                    format!("ID \"{id}\" is not in the form A-YYMMDD-n")
-                } else if uses.get(id).is_some_and(|&n| n > 1) {
-                    format!("ID {id} is used by more than one action item, so this row is linked to neither")
-                } else {
-                    format!("ID {id} matches no action item in an earlier meeting")
-                });
+                // No action item has this ID, and it names a day before the oldest summary: its meeting isn't here.
+                from_before_first = !uses.contains_key(id)
+                    && id_date(id).is_some_and(|d| js::is_real_date(&d) && oldest.as_deref().is_some_and(|o| d.as_str() < o));
+                if !from_before_first {
+                    let (template, parts): (&str, &[&str]) = if id_date(id).is_none() {
+                        ("ID \"{}\" is not in the form A-YYMMDD-n", &[id])
+                    } else if uses.get(id).is_some_and(|&n| n > 1) {
+                        ("ID {} is used by more than one action item, so this row is linked to neither", &[id])
+                    } else {
+                        ("ID {} matches no action item in an earlier meeting", &[id])
+                    };
+                    problems.insert(0, Warning::varied(&m.file, template, parts));
+                }
             }
             // A well-formed ID holds the date of the meeting the item came from, so a "From" that can't be read loses nothing.
             let origin = parse_summary_dates(&plain_text(&o.from), &date).into_iter().next()
@@ -501,8 +577,9 @@ pub fn build_tracked(meetings: &[Meeting], people: &People, as_of: &str) -> (Vec
             // can't be read from it is not a problem. A date that can be read still orders the table and gives the age.
             let background = o.id.is_none();
             if origin.is_none() && !background {
-                warnings.push(Warning { file: m.file.clone(), message: format!("first-seen date {COULD_NOT_READ}: \"{}\"", plain_text(&o.from)) });
+                warnings.push(Warning::varied(&m.file, &format!("first-seen date {COULD_NOT_READ}: \"{{}}\""), &[&plain_text(&o.from)]));
             }
+            if from_before_first { before_first.insert(o.id.clone().unwrap(), items.len()); }
             let written = js::trim(&plain_text(&o.owner)).to_string();
             items.push(Tracked {
                 key: format!("{}#open-{}", m.file, oi + 1),
@@ -518,7 +595,8 @@ pub fn build_tracked(meetings: &[Meeting], people: &People, as_of: &str) -> (Vec
                 order,
                 usable: false,
                 mentions: vec![mention],
-                problems: problems.into_iter().map(|p| (m.file.clone(), p)).collect(),
+                before_first: from_before_first,
+                problems,
             });
         }
     }
@@ -526,8 +604,8 @@ pub fn build_tracked(meetings: &[Meeting], people: &People, as_of: &str) -> (Vec
     let mut rows: Vec<(Option<String>, String, TrackedRow)> = items.iter().map(|it| {
         let latest = it.mentions.last().unwrap();
         let state = latest.state();
-        for (file, message) in &it.problems { warnings.push(Warning { file: file.clone(), message: message.clone() }); }
-        let row = json!({
+        warnings.extend(it.problems.iter().cloned());
+        let mut row = json!({
             "key": it.key,
             "id": it.id,
             "kind": it.kind,
@@ -543,9 +621,11 @@ pub fn build_tracked(meetings: &[Meeting], people: &People, as_of: &str) -> (Vec
             "latestStatusHtml": render_inline(&latest.status),
             "state": state,
             "suggested": it.suggested,
-            "problems": it.problems.iter().map(|(_, p)| p).collect::<Vec<_>>(),
+            "problems": it.problems.iter().map(|p| &p.message).collect::<Vec<_>>(),
             "sources": it.mentions.iter().map(|x| json!({ "file": x.file, "date": x.date, "kind": x.kind })).collect::<Vec<_>>(),
         });
+        // Shown as "from before your first saved summary"; only such a row has it.
+        if it.before_first { row["beforeFirstSummary"] = json!(true); }
         let mentions = it.mentions.iter().map(|x| (x.date.clone(), x.state())).collect();
         (it.first_seen.clone(), it.key.clone(), TrackedRow { json: row, usable: it.usable, mentions })
     }).collect();
@@ -599,7 +679,7 @@ pub fn meetings_overview(ws: &Workspace, demo: bool) -> Result<Value, Error> {
         ledger::Loaded::Missing => Some(serde_json::Map::new()),
         ledger::Loaded::Ok(l) => Some(l["items"].as_object().cloned().unwrap_or_default()),
         ledger::Loaded::Unreadable(why) => {
-            warnings.push(Warning { file: ledger::FILE.to_string(), message: format!("{COULD_NOT_READ}: {why}, so no chips or \"Closed\" dates are shown") });
+            warnings.push(Warning::new(ledger::FILE, format!("{COULD_NOT_READ}: {why}, so no chips or \"Closed\" dates are shown")));
             None
         }
     };
@@ -651,6 +731,74 @@ mod tests {
     fn a_month_name_between_two_numbers_keeps_its_month_first_reading() {
         assert_eq!(parse_summary_dates("Sam 1:1 May 5", "2026-10-12"), ["2026-05-05"]);
         assert_eq!(parse_summary_dates("Praveen 1:1 Jul 28; Sep 8", "2026-10-12"), ["2026-07-28", "2026-09-08"]);
+    }
+
+    #[test]
+    fn header_fields_are_read_in_three_forms_any_capitals_and_by_their_other_names() {
+        let fields = |src: &str| extract_header_fields(src).fields.into_iter().map(|f| (f.name, f.value)).collect::<Vec<_>>();
+        for src in [
+            "# T\n\n**Attendees:** Sam, Kevin\n**Type:** 1:1\n",
+            "# T\n\n**Attendees**: Sam, Kevin\n**Type**: 1:1\n",
+            "# T\n\nAttendees: Sam, Kevin\nType: 1:1\n",
+            "# T\n\n**ATTENDEES:** Sam, Kevin | **type**: 1:1\n",
+            "# T\n\nParticipants: Sam, Kevin | Meeting type: 1:1\n",
+            "# T\n\n**participants:** Sam, Kevin\n**Meeting Type**: 1:1\n",
+        ] {
+            let f = fields(src);
+            assert_eq!(f[2], ("Attendees".to_string(), Some("Sam, Kevin".to_string())), "{src}");
+            assert_eq!(f[4], ("Type".to_string(), Some("1:1".to_string())), "{src}");
+            assert_eq!(header_field(src, "Attendees").as_deref(), Some("Sam, Kevin"), "{src}");
+            assert_eq!(header_field(src, "Type").as_deref(), Some("1:1"), "{src}");
+            assert!(!extract_header_fields(src).body.contains("Sam"), "{src}");
+        }
+    }
+
+    #[test]
+    fn a_bold_field_is_read_anywhere_and_a_plain_one_only_on_a_header_line() {
+        for src in [
+            "# T\n\n---\n\n**Attendees:** Sam\n",
+            "# T\n\n## Meeting info\n\n**Attendees**: Sam\n",
+            "# T\n\n## Meeting info\n\n**participants:** Sam\n",
+            "# T\n\nWe met. **Attendees:** Sam | 30 minutes\n",
+        ] {
+            assert_eq!(header_field(src, "Attendees").as_deref(), Some("Sam"), "{src}");
+            let header = extract_header_fields(src);
+            assert_eq!(header.fields[2].value.as_deref(), Some("Sam"), "{src}");
+            assert!(!header.missing.iter().any(|n| n == "Attendees"), "{src}");
+            // It stays where it is written.
+            assert!(header.body.contains("Sam"), "{src}");
+        }
+        assert_eq!(header_field("# T\n\n## Meeting info\n\n**Meeting type:** 1:1\n", "Type").as_deref(), Some("1:1"));
+        for src in [
+            "# T\n\n---\n\nAttendees: Sam\n",
+            "# T\n\n## Meeting info\n\nAttendees: Sam\n",
+            "# T\n\n## Meeting info\n\nParticipants: Sam\n",
+            "# T\n\nWe met. Attendees: Sam\n",
+            "# T\n\nPeople: Sam\n",
+        ] {
+            assert_eq!(header_field(src, "Attendees"), None, "{src}");
+            assert_eq!(extract_header_fields(src).fields[2].value, None, "{src}");
+        }
+        // The header's own field comes first.
+        assert_eq!(header_field("# T\n\n**Attendees:** Sam\n\n## Meeting info\n\n**Attendees:** Kevin\n", "Attendees").as_deref(), Some("Sam"));
+        // A plain "Name:" line is a field only for a field the app reads; a bold field by another name only in the header.
+        assert!(extract_header_fields("# T\n\nNote: rescheduled\n").fields.iter().all(|f| f.name != "Note"));
+        assert!(extract_header_fields("# T\n\n**Note**: rescheduled\n").fields.iter().any(|f| f.name == "Note"));
+        assert!(extract_header_fields("# T\n\n---\n\n**Note**: rescheduled\n").fields.iter().all(|f| f.name != "Note"));
+    }
+
+    #[test]
+    fn status_words_and_their_synonyms() {
+        for (status, state) in [
+            ("Open", Some("open")), ("in progress, half done", Some("open")), ("Ongoing.", Some("open")), ("PENDING", Some("open")),
+            ("Still open: waiting", Some("open")), ("Not started", Some("open")), ("Blocked on Dana", Some("open")), ("Partially done", Some("open")),
+            ("**Done.**", Some("done")), ("Closed", Some("done")), ("completed", Some("done")), ("Complete", Some("done")),
+            ("Resolved.", Some("done")), ("Finished", Some("done")),
+            ("Dropped", Some("dropped")), ("Cancelled", Some("dropped")), ("Canceled", Some("dropped")), ("abandoned", Some("dropped")),
+            ("Handed over", None), ("Not done", None), ("Still", None), ("In-progress", None), ("Opened", None), ("Closing", None), ("", None),
+        ] {
+            assert_eq!(status_state(status), state, "{status}");
+        }
     }
 
     #[test]

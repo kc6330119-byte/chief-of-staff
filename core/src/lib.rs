@@ -69,6 +69,38 @@ pub enum Error {
 pub struct Warning {
     pub file: String,
     pub message: String,
+    /// The message without its varying part (an ID, a cell's text), which Meetings groups the warnings by. None
+    /// when the message has no varying part: it is its own kind.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+}
+
+impl Warning {
+    pub fn new(file: impl Into<String>, message: impl Into<String>) -> Warning {
+        Warning { file: file.into(), message: message.into(), kind: None }
+    }
+
+    /// A warning made from a template whose "{}" are filled in turn with `parts`; its kind is the template with
+    /// each "{}" written "…".
+    pub fn varied(file: impl Into<String>, template: &str, parts: &[&str]) -> Warning {
+        let (message, kind) = fill(template, parts);
+        Warning { file: file.into(), message, kind: Some(kind) }
+    }
+}
+
+/// A template's message and kind: each "{}" filled in turn with `parts`, and each written "…".
+pub fn fill(template: &str, parts: &[&str]) -> (String, String) {
+    let mut message = String::new();
+    let mut rest = template;
+    for p in parts {
+        let (before, after) = rest.split_once("{}").expect("a part for each {}");
+        message.push_str(before);
+        message.push_str(p);
+        rest = after;
+    }
+    message.push_str(rest);
+    // A cell cut short already ends in "…".
+    (message, template.replace("{}", "…").replace("……", "…"))
 }
 
 /// Who may call the core. Each caller lists the Host values and Origins its own pages use.

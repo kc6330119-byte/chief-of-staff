@@ -95,7 +95,7 @@ fn parse_rules(body: &str) -> (Option<String>, Vec<String>) {
 
 fn parse_instruction_file(ws: &Workspace, rel: &str, fallback_name: &str) -> Result<Value, Error> {
     let mut warnings = Vec::new();
-    let mut warn = |message: String| warnings.push(Warning { file: rel.to_string(), message });
+    let mut warn = |message: String| warnings.push(Warning::new(rel, message));
     let src = ws.read_text(rel)?;
     let fm = split_frontmatter(&src);
     let body = fm.body;

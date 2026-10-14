@@ -188,6 +188,11 @@ main > section { margin-top: 24px; }
 .notice-warn { background: var(--late-bg); border-color: var(--late-bg); }
 .notice-warn summary { cursor: pointer; color: var(--late); }
 .notice-warn li { color: var(--text); }
+.notice-warn .warning-groups { list-style: none; padding-left: 0; }
+.warning-group { margin: 0 0 4px; }
+.warning-group summary { color: var(--text); overflow-wrap: anywhere; }
+.warning-group .warning-count { display: inline-block; min-width: 2.5em; margin-right: 4px; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--late); }
+.warning-group ul { margin: 4px 0 8px; overflow-wrap: anywhere; }
 .notice-error { border-color: var(--danger); }
 .notice-error strong { color: var(--danger); }
 

@@ -10,11 +10,11 @@ A Rust core reads and writes the files and answers every request. The interface 
 JavaScript inside a native macOS window (the system's own WebKit, through Tauri). There is no server, no
 browser and no network port.
 
-Version 0.3.1, built from Mission Control Native 0.1.1.
+Version 0.3.2, built from Mission Control Native 0.1.1.
 
 ## Download
 
-Download `Chief-of-Staff-for-Managers-0.3.1-universal.dmg` from [the latest release][latest]. It runs on
+Download `Chief-of-Staff-for-Managers-0.3.2-universal.dmg` from [the latest release][latest]. It runs on
 macOS 13 or later, on Apple silicon and Intel Macs.
 
 1. Open the `.dmg`. A window shows the app and a shortcut to Applications.
@@ -157,6 +157,23 @@ Board.
 The app reads a date in a summary written Aug 13, 2026, 13 August 2026 or 2026-08-13, but never as 03/08/2026,
 which could mean two different days. When an earlier item's From can't be read, the date in its ID is the day it
 was first seen: A-260813-4 was first seen on Aug 13, 2026.
+
+The app also reads summaries written a little differently:
+
+- Header fields in any capitals, written `**Attendees:**` or `**Attendees**:` anywhere in the summary, or
+  `Attendees:` at the start of a line above the first `##` heading or `---` line. Participants is read as
+  Attendees, and Meeting type as Type.
+- The headings "Action Items" and "Open Items from Earlier Meetings" in any capitals, with or without a colon
+  at the end. "Next steps" is still not "Action Items".
+- A "Status now" that starts, in any capitals, with Open, In progress, Ongoing, Pending, Still open, Not
+  started, Blocked or Partially (open); Done, Closed, Completed, Complete, Resolved or Finished (done); or
+  Dropped, Cancelled, Canceled or Abandoned (dropped). Any other word counts as open and is listed as a
+  problem.
+
+An earlier item whose ID is dated before your oldest summary in `meeting-notes/` is not a problem: its meeting
+isn't saved there. Meetings lists it once, with its latest status and the note "from before your first saved
+summary", and it is not on the Board or Today. On Meetings, the things that could not be read are grouped by
+kind, the most common first, with a count for each; open a group to see its files.
 
 ### Before you start
 

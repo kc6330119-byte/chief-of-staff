@@ -52,7 +52,7 @@ fn view_book(b: &Value, index: usize, notes_files: &[String]) -> (Map<String, Va
     let mut warnings = Vec::new();
     let mut field = |name: &str, ok: bool, value: Value| -> Value {
         if ok { return value; }
-        warnings.push(Warning { file: FILE.into(), message: format!("book {}, \"{name}\" {COULD_NOT_READ}: {}", index + 1, js::stringify(b.get(name))) });
+        warnings.push(Warning::new(FILE, format!("book {}, \"{name}\" {COULD_NOT_READ}: {}", index + 1, js::stringify(b.get(name)))));
         cnr()
     };
     let text_ok = |k: &str| b.get(k).and_then(Value::as_str).is_some_and(|s| !js::trim(s).is_empty());
@@ -80,7 +80,7 @@ fn view_book(b: &Value, index: usize, notes_files: &[String]) -> (Map<String, Va
         match notes.and_then(Value::as_str).and_then(|n| NOTES_FILE.captures(n)) {
             None => field("notes", false, Value::Null),
             Some(m) if !notes_files.iter().any(|f| f == &m[1]) => {
-                warnings.push(Warning { file: FILE.into(), message: format!("book {}, notes file not found: {}", index + 1, js::string(notes)) });
+                warnings.push(Warning::new(FILE, format!("book {}, notes file not found: {}", index + 1, js::string(notes))));
                 json!({ "missing": notes })
             }
             Some(m) => json!({ "file": &m[1], "path": notes }),

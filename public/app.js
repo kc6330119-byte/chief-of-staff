@@ -68,6 +68,31 @@ function warningsPanel(warnings) {
     </details>`;
 }
 
+// Meetings groups its warnings by kind, the message without the part that varies (an ID, a cell's text), most
+// first; each group opens to its files and messages. The first line still counts every warning, as Today's last
+// line does. A warning with no kind is its own kind.
+function groupedWarningsPanel(warnings) {
+  if (!warnings?.length) return '';
+  const groups = new Map();
+  for (const w of warnings) {
+    const kind = w.kind || w.message;
+    if (!groups.has(kind)) groups.set(kind, []);
+    groups.get(kind).push(w);
+  }
+  // A stable sort: kinds with the same count keep the order they were first found in.
+  const sorted = [...groups].sort((a, b) => b[1].length - a[1].length);
+  return `
+    <details class="notice notice-warn" id="meetings-warnings">
+      <summary><strong>${warnings.length} thing${warnings.length === 1 ? '' : 's'} could not be read.</strong> Shown as "could not read" below, grouped by kind.</summary>
+      <ul class="warning-groups">${sorted.map(([kind, ws]) => `
+        <li><details class="warning-group">
+          <summary><span class="warning-count">${ws.length}</span> ${esc(kind)}</summary>
+          <ul>${ws.map((w) => `<li><code>${esc(w.file)}</code>: ${esc(w.message)}</li>`).join('')}</ul>
+        </details></li>`).join('')}
+      </ul>
+    </details>`;
+}
+
 // A page whose file isn't in the workspace shows this plain notice instead of an error, as the Agents page
 // does for a missing agents folder. A file that is there but can't be read is still an error.
 function missingFile(file, what) {
@@ -1178,7 +1203,7 @@ async function renderMeetings(params = {}) {
       <h1>Meetings</h1>
       ${privateSwitch()}
     </div>
-    ${warningsPanel(data.warnings)}
+    ${groupedWarningsPanel(data.warnings)}
     ${peopleMissing}
 
     <section class="panel" aria-labelledby="tracked-h">
@@ -1279,6 +1304,7 @@ async function renderMeetings(params = {}) {
           ${r.suggested && r.chip?.rule !== 'suggested' ? '<span class="tag tag-suggested">suggested</span>' : ''}
           ${r.problems.length ? '<span class="tag tag-problem">check</span>' : ''}
           ${r.problems.length ? `<ul class="problems">${r.problems.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}
+          ${r.beforeFirstSummary ? '<div class="muted small before-first">from before your first saved summary</div>' : ''}
         </td>
         <td>${r.owner ? esc(r.owner) : COULD_NOT_READ}</td>
         <td>${r.dueDate ? `<span class="date">${fmtDate(r.dueDate)}</span>` : ''}${r.due ? `<div class="muted small">${esc(r.due)}</div>` : ''}</td>

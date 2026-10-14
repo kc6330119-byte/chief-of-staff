@@ -254,9 +254,32 @@ The app could not read a table, a field or a date reliably, so it shows "could n
 instead of guessing. To see why, open the line at the top of the page that says how many things could not
 be read. It lists each file and the reason. On Today, the last line says how many and links to Meetings.
 
+On Meetings, that list is grouped by kind of problem, the most common first, each with how many there are.
+Open a group to see each file and the full reason. The total is the same as on Today's last line.
+
 A date in a summary is read when it is written Aug 13, 2026, 13 August 2026 or 2026-08-13, but never as
 03/08/2026, which could mean two different days. When an earlier item's From can't be read, the date in its
 ID is used as the day it was first seen: A-260813-4 was first seen on Aug 13, 2026.
+
+A header field, such as Attendees, is read in any capitals. Written in bold, `**Attendees:**` or
+`**Attendees**:`, it is read anywhere in the summary. Written plain, `Attendees:`, it is read only at the
+start of a line above the first `##` heading or `---` line. Participants is read as Attendees, and Meeting
+type as Type. The headings "Action Items" and "Open Items from Earlier Meetings" are
+read in any capitals, with or without a colon at the end. Other headings, such as "Next steps", are not.
+
+An earlier item's "Status now" is read from its first word or words, in any capitals:
+
+- Open: Open, In progress, Ongoing, Pending, Still open, Not started, Blocked or Partially
+- Done: Done, Closed, Completed, Complete, Resolved or Finished
+- Dropped: Dropped, Cancelled, Canceled or Abandoned
+
+Any other word counts as open, and the problem lists these words. A summary that says an item is done or
+dropped, in any of these words, can show it at the end of "Needs you now" on Today.
+
+An earlier item whose ID is dated before your oldest summary in `meeting-notes/` comes from a meeting that
+isn't saved there, so it has no action item to match. That is not a problem: Meetings lists it once, with
+its latest status and the note "from before your first saved summary". It is not on the Board or Today. An
+ID dated on or after your oldest summary that matches no action item is still a problem.
 
 ### What does "Suggested" mean?
 

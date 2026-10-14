@@ -185,8 +185,8 @@ function writeFixtures(root) {
     '| A-261005-7 | A row whose owner is not in people.md | Pat Nobody | Not set |  | Open |',
     '| A-261005-8 | A suggested row *(suggested)* | Kevin Collins | Next 1:1 |  | Suggested |',
   ].join('\n') + '\n' + EARLIER + [
-    '| A-260101-1 | Jan 1, 2026 | An ID that matches no item | Kevin Collins | 9 months | Open. Not mentioned. |',
-    '| A-260505-1 | May 5, 2026 (Sam 1:1) | Bring the duplicates to Dana | Kevin Collins | 22 weeks | Closed. Dana has it now. |',
+    '| A-260601-1 | Jun 1, 2026 | An ID that matches no item | Kevin Collins | 4 months | Open. Not mentioned. |',
+    '| A-260505-1 | May 5, 2026 (Sam 1:1) | Bring the duplicates to Dana | Kevin Collins | 22 weeks | Handed over. Dana has it now. |',
   ].join('\n') + '\n');
   // A second meeting on the same day: its IDs carry a letter after the date.
   put(OCT5B, header('Kevin & Riley', 'October 5, 2026', 'Kevin Collins (SRE Manager), Riley Brooks (SRE I)') + ACTIONS + [
@@ -300,18 +300,19 @@ describe('problems are reported, never guessed', () => {
     assert.deepEqual(item.problems, []);
   });
 
+  // Its ID's date (Jun 1) is after the oldest summary (May 5), so its meeting should be here.
   test('an earlier-items ID that matches no item', () => {
-    const row = data.tracked.find((r) => r.id === 'A-260101-1');
+    const row = data.tracked.find((r) => r.id === 'A-260601-1');
     assert.ok(row, 'the row is listed');
     assert.equal(row.kind, 'earlier item');
     flagged(row, /matches no action item/);
   });
 
-  test('a "Status now" that starts with none of the three words is treated as open, and flagged', () => {
+  test('a "Status now" that starts with none of the accepted words is treated as open, and flagged', () => {
     const item = byId(data.tracked, 'A-260505-1');
-    assert.equal(item.latestStatus, 'Closed. Dana has it now.');
+    assert.equal(item.latestStatus, 'Handed over. Dana has it now.');
     assert.equal(item.state, 'open');
-    assert.ok(data.warnings.some((w) => w.file === OCT5 && /Status now/.test(w.message) && /Open, Done or Dropped/.test(w.message)), 'flagged');
+    assert.ok(data.warnings.some((w) => w.file === OCT5 && /Status now/.test(w.message) && /Open, In progress, .* Done, .* or Abandoned/.test(w.message)), 'flagged');
   });
 
   test('a summary in the old format still opens; its rows show "no ID", with one warning for the file', async () => {

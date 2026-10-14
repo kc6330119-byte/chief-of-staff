@@ -62,7 +62,7 @@ fn view_of(data: &Value) -> Value {
         let mut row = Map::new();
         row.insert("index".into(), json!(index));
         if !e.is_object() {
-            warnings.push(Warning { file: FILE.into(), message: format!("entry {} {COULD_NOT_READ}", index + 1) });
+            warnings.push(Warning::new(FILE, format!("entry {} {COULD_NOT_READ}", index + 1)));
             for f in FIELDS { row.insert(f.into(), json!({ "cnr": true })); }
             return Value::Object(row);
         }
@@ -73,7 +73,7 @@ fn view_of(data: &Value) -> Value {
                 row.insert(f.into(), v.unwrap().clone());
             } else {
                 row.insert(f.into(), json!({ "cnr": true }));
-                warnings.push(Warning { file: FILE.into(), message: format!("entry {}, \"{f}\" {COULD_NOT_READ}: {}", index + 1, js::stringify(v)) });
+                warnings.push(Warning::new(FILE, format!("entry {}, \"{f}\" {COULD_NOT_READ}: {}", index + 1, js::stringify(v))));
             }
         }
         Value::Object(row)
