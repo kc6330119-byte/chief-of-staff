@@ -10,11 +10,11 @@ A Rust core reads and writes the files and answers every request. The interface 
 JavaScript inside a native macOS window (the system's own WebKit, through Tauri). There is no server, no
 browser and no network port.
 
-Version 0.3.2, built from Mission Control Native 0.1.1.
+Version 0.3.3, built from Mission Control Native 0.1.1.
 
 ## Download
 
-Download `Chief-of-Staff-for-Managers-0.3.2-universal.dmg` from [the latest release][latest]. It runs on
+Download `Chief-of-Staff-for-Managers-0.3.3-universal.dmg` from [the latest release][latest]. It runs on
 macOS 13 or later, on Apple silicon and Intel Macs.
 
 1. Open the `.dmg`. A window shows the app and a shortcut to Applications.
@@ -145,14 +145,16 @@ with View ▸ Reload (⌘R). Its action items are on Today and the Board straigh
 ### The summary format
 
 The template is `templates/meeting-summary-template.md`. The coach gives every new action item an ID,
-A-YYMMDD-n (the meeting date and its row number), and never changes or reuses one. Each item has one owner,
-spelled as in `people.md`, the words said about when it is due, and a due date only when those words fix a
-day. An earlier item is never listed again as new: it goes under Open Items from Earlier Meetings with its
-ID, and its "Status now" starts with Open, Done or Dropped. The coach reports; only you close an item, in the
-app.
+A-YYMMDD-n (the meeting date and its row number), and never changes or reuses one. When another summary
+already uses IDs for that date, it adds the next letter after the date: A-YYMMDDb-n, then A-YYMMDDc-n. Each
+item has one owner, spelled as in `people.md`, the words said about when it is due, and a due date only when
+those words fix a day. An earlier item is never listed again as new: it goes under Open Items from Earlier
+Meetings with its ID, and its "Status now" starts with Open, Done or Dropped. The coach reports; only you
+close an item, in the app.
 
 The app follows an item by its ID. A row with no ID is shown on Meetings as "no ID" and can't be on the
-Board.
+Board. Keep shared or exported copies of a summary outside `meeting-notes/`, for example in `shared/`: every
+file in `meeting-notes/` is read as its own meeting, so a copy there repeats its IDs.
 
 The app reads a date in a summary written Aug 13, 2026, 13 August 2026 or 2026-08-13, but never as 03/08/2026,
 which could mean two different days. When an earlier item's From can't be read, the date in its ID is the day it

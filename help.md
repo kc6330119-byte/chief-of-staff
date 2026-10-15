@@ -152,8 +152,12 @@ Claude Code:
 3. In the app, click **Meetings**, or choose **View > Reload** (⌘R) if it is already showing.
 
 The coach writes the summary in the template's format. It gives each new action item an ID, such as
-A-261005-1: the meeting date and the item's row number. Each item has one owner, spelled as in
+A-261005-1: the meeting date and the item's row number. For a second meeting on the same day, it adds a
+letter after the date, A-261005b-1, so no ID is used twice. Each item has one owner, spelled as in
 `people.md`. If a name is not in `people.md`, the coach asks.
+
+Keep shared or exported copies of a summary outside `meeting-notes/`, for example in `shared/`: every file
+in `meeting-notes/` is read as its own meeting.
 
 The coach only reports. An earlier item goes under "Open Items from Earlier Meetings" with Open, Done or
 Dropped. Only you close an item, in the app.
@@ -280,6 +284,9 @@ An earlier item whose ID is dated before your oldest summary in `meeting-notes/`
 isn't saved there, so it has no action item to match. That is not a problem: Meetings lists it once, with
 its latest status and the note "from before your first saved summary". It is not on the Board or Today. An
 ID dated on or after your oldest summary that matches no action item is still a problem.
+
+An ID used by more than one action item usually means two meetings on the same day without a letter, such
+as A-261005-1 in both; the second meeting's IDs should be A-261005b-1 and on.
 
 ### What does "Suggested" mean?
 

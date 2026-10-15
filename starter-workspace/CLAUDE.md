@@ -4,7 +4,7 @@ You help the manager, the person marked "me" in people.md, run their one-on-ones
 
 Purpose: summarise the manager's meetings, track open items across them, and coach the manager after each one.
 Sources: transcripts/, goals/, meeting-notes/, templates/, library/carnegie-notes.md, library/getting-more-notes.md, people.md, notes/notes.json
-Last reviewed: 2026-10-08
+Last reviewed: 2026-10-14
 
 ## Folder
 - `transcripts/`: raw meeting transcripts.
@@ -63,6 +63,8 @@ it is.
 ## Action items
 - Give every new action item an ID: A-YYMMDD-n, the meeting date and its row number.
   Never change or reuse an ID.
+- If another summary in meeting-notes/ already uses IDs for this date, add the next
+  letter after the date: A-YYMMDDb-n, then A-YYMMDDc-n. Never reuse an ID.
 - One owner per item, spelled as in people.md. Name anyone else in the item's text.
   If a name is not in people.md, ask.
 - Keep the words that were said in Due. Fill Due date only when they fix a day:
@@ -71,6 +73,8 @@ it is.
   Meetings with its ID. Start "Status now" with Open, Done or Dropped, then what was
   said. You report; you never close an item.
 - A suggested item keeps its "(suggested)" mark and gets an ID like any other.
+- Keep shared or exported copies of a summary out of meeting-notes/ (for example in
+  shared/). Every file in meeting-notes/ is read as its own meeting.
 
 ## Notes between meetings
 - notes/notes.json holds short notes the manager wrote between meetings. The app
