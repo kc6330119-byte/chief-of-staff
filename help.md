@@ -66,8 +66,9 @@ The window title shows which folder is open.
 - **People**: you, then your reports, your manager, peers and others, in the order of `people.md`. Each
   row shows the last meeting with you, what they owe you and what you owe them. Click a name for that
   person's page.
-- **Agents**: the coach (`CLAUDE.md`) and each agent in `.claude/agents/`, one card each. The page only
-  shows them. Below the cards, "Rules learned" is your log of corrections.
+- **Agents**: the coach (`CLAUDE.md`), each agent in `.claude/agents/` and each skill in `.claude/skills/`,
+  one card each. A skill's card says "Skill" and the command that runs it, such as `/review-transcript`.
+  The page only shows them. Below the cards, "Rules learned" is your log of corrections.
 - **Library**: your books, your ratings and your own notes on them.
 
 ### Review the sample transcript
@@ -95,8 +96,9 @@ Because the sample counts to its newest meeting, Today now counts to this one.
 A new workspace never replaces a file or folder that is already there. If the name is taken, nothing is
 made, and you choose a new name.
 
-It holds the coach (`CLAUDE.md`), five agents in `.claude/agents/`, the summary template in `templates/`,
-book notes in `library/` and a `people.md` with one row for you. The folders `goals/`, `meeting-notes/` and
+It holds the coach (`CLAUDE.md`), five agents in `.claude/agents/`, the review-transcript skill in
+`.claude/skills/`, the hook that checks each summary (`.claude/settings.json` and `.claude/hooks/`), the
+summary template in `templates/`, book notes in `library/` and a `people.md` with one row for you. The folders `goals/`, `meeting-notes/` and
 `transcripts/` are empty except for a short `README.txt` in each. It is not the sample, so there is no
 "Recreated demo data" badge, and ages count to today.
 
@@ -115,7 +117,8 @@ The coach asks one question at a time:
 Then it:
 
 - writes `people.md` from your answers, with your own row marked "me"
-- puts your first name in `CLAUDE.md` and in each agent, where they say "the manager"
+- puts your first name in `CLAUDE.md`, in each agent and in the review-transcript skill, where they say
+  "the manager"
 - puts your company in the summary template
 - offers to start a goals file in `goals/` for each report, with only what you tell it
 - lists every file it changed, then removes the setup steps from `CLAUDE.md`
@@ -138,6 +141,8 @@ Claude Code:
 - [ ] `CLAUDE.md`: it names Kevin and Harborline Cloud at the top, and Kevin in later rules. Change them to
   your name and company.
 - [ ] `.claude/agents/`: each agent names Kevin in its `description:` line. Change it to your name.
+- [ ] `.claude/skills/review-transcript/SKILL.md`: it names Kevin. Change it to your name. `example.md`
+  beside it is one of the sample's summaries, kept as an example of the format.
 - [ ] `goals/` and `meeting-notes/`: remove the sample's goals file and its summaries. The coach and the
   agents read them. Remove the sample transcript from `transcripts/` too.
 - [ ] `.sample-workspace`: delete this file. Then choose **View > Reload** (⌘R). The badge goes, and ages
@@ -148,8 +153,15 @@ Claude Code:
 ### Review a meeting
 
 1. Put the transcript in `transcripts/`, one file per meeting.
-2. In Claude Code, in your workspace folder, type: `Review the transcript transcripts/<its file name>`
+2. In Claude Code, in your workspace folder, type `/review-transcript transcripts/<its file name>`, or ask
+   in plain words: `Review the transcript transcripts/<its file name>`. Both use the review-transcript
+   skill in `.claude/skills/`.
 3. In the app, click **Meetings**, or choose **View > Reload** (⌘R) if it is already showing.
+
+As Claude Code saves the summary, the app checks it, as Meetings would. If it could not read something,
+such as an ID not in the form A-YYMMDD-n, it tells Claude, and Claude fixes the summary and saves it again.
+The check needs the app at 0.4.0 or later, in Applications. An older app is never started, and the summary
+is saved unchecked. See "What does the workspace's hook do?" below.
 
 The coach writes the summary in the template's format. It gives each new action item an ID, such as
 A-261005-1: the meeting date and the item's row number. For a second meeting on the same day, it adds a
@@ -314,7 +326,52 @@ Only these four, in the workspace:
 - `library/books.json`: your books, from the Library page.
 - `corrections/corrections.json`: your log under "Rules learned" on the Agents page.
 
-Opening a page writes nothing. The app never writes a summary, `people.md`, `CLAUDE.md` or an agent.
+Opening a page writes nothing. The app never writes a summary, `people.md`, `CLAUDE.md`, an agent or a
+skill. Its check, from the hook or from Terminal, writes nothing at all.
+
+### What does the workspace's hook do?
+
+`.claude/settings.json`, in the sample and in a new workspace, holds a hook: a command that Claude Code
+runs by itself. It runs each time Claude Code saves a file with its Edit or Write tool, and it runs
+`.claude/hooks/check-summary.sh`. For a file outside `meeting-notes/`, the script stops there. For a
+summary, it runs the app's check on that one summary (`chief-of-staff --hook`) and passes what the check
+reports back to Claude. It only reads: neither the script nor the app writes, changes or deletes a file. If
+the app isn't installed, or is older than 0.4.0, the script doesn't start it.
+
+Claude Code runs a workspace's hooks without asking. It asks only whether you trust the folder, the first
+time you start it there (or not at all if you already trust a folder it is in, or you run `claude -p`).
+After that it runs whatever hooks the folder's `.claude/settings.json` holds, every time, without showing
+them. So before you start Claude Code in a workspace someone gives you, read its `.claude/settings.json`.
+In Claude Code, `/hooks` lists the hooks a folder has.
+
+To turn ours off, delete the hook from `.claude/settings.json`: the `"hooks"` entry, leaving `{}` if nothing
+else is in the file. Summaries are then saved unchecked, and Meetings still lists anything that could not
+be read.
+
+### Adding the check to an older workspace
+
+A workspace made before 0.4.0 has no hook and no review-transcript skill. To add them:
+
+1. Choose **File > Open Sample Workspace…** and save a new copy. The app opens it.
+2. Copy `.claude/settings.json`, `.claude/hooks/` and `.claude/skills/` from the new copy's `.claude/` into
+   your workspace's `.claude/`. If yours already has a `.claude/settings.json`, don't replace it: add the
+   new copy's `"PostToolUse"` entry to the `"hooks"` in yours. `.claude` is hidden: in Finder, press
+   Command-Shift-period to see it.
+3. The skill names Kevin. In `.claude/skills/review-transcript/SKILL.md`, change it to your name.
+4. Your `CLAUDE.md` still has its own review steps, in "When … asks you to review a transcript", "Dates"
+   and "Action items". Move them out, by deleting those sections, or keep them. Both work, but the skill is
+   the one kept up to date.
+5. Choose **File > Choose Workspace…** (⌘O) to open your workspace again. Then start a new Claude Code
+   session in it.
+
+### Check a workspace from Terminal
+
+The app runs the same check without opening its window:
+`"/Applications/Chief of Staff for Managers.app/Contents/MacOS/chief-of-staff" --check <folder>`. It prints
+"Nothing could not be read", or how many things could not be read and one line for each, as Meetings lists
+them, and writes nothing. Add `--file meeting-notes/<name>.md` to check one summary. It exits 0 when
+nothing could not be read, 1 when something could not be read, and 2 when the folder or summary can't
+be opened or isn't a workspace.
 
 ### What stays private?
 

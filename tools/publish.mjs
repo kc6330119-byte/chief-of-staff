@@ -6,7 +6,8 @@
 //    else is replaced, so a file removed here disappears there too (decision 79). No git command is ever run
 //    in that folder: nothing is added, committed, tagged or pushed. That is left to the person.
 // 2. Runs `npm test` inside that folder with nothing but its own files (Cargo's build output goes to this
-//    repository's target/, so the folder stays clean), and checks the run added nothing to it.
+//    repository's target/, so the folder stays clean), and checks the run added nothing to it but build output
+//    that .gitignore leaves out (Tauri's app/gen/), which it removes.
 // 3. Scans every file's name and contents for the home-folders path ("/Users" and a slash on a Mac), this
 //    Mac's user name, and any extra terms. Extra
 //    terms come from MC_SCAN_TERMS (comma-separated) or, with --ask, from a prompt that doesn't show what is
@@ -106,9 +107,21 @@ const test = sh('npm', ['test'], { cwd: DEST, env, maxBuffer: 64 * 1024 * 1024 }
 const summary = `${test.stdout}${test.stderr}`.split('\n').filter((l) => /^# (tests|pass|fail|cancelled) /.test(l)).map((l) => l.slice(2)).join(', ');
 const testsPassed = test.status === 0 && /fail 0/.test(summary) && /cancelled 0/.test(summary);
 console.log(`npm test: ${summary || 'no summary'}${testsPassed ? '' : ' — FAILED'}`);
-const after = fingerprint(DEST);
+let after = fingerprint(DEST);
+// Building the app crate writes Tauri's app/gen/ into the source folder. New files that this repository's .gitignore
+// leaves out are build output, never published: they are removed, and said so. (git runs here, never in DEST.)
+const added = Object.keys(after).filter((k) => !(k in before));
+const ignored = added.length
+  ? sh('git', ['check-ignore', '--no-index', '--stdin'], { cwd: REPO, input: added.join('\n') }).stdout.split('\n').filter(Boolean)
+  : [];
+for (const rel of ignored) {
+  fs.rmSync(path.join(DEST, rel));
+  for (let d = path.dirname(rel); d !== '.' && fs.readdirSync(path.join(DEST, d)).length === 0; d = path.dirname(d)) fs.rmdirSync(path.join(DEST, d));
+}
+if (ignored.length) console.log(`The test run made build output that .gitignore leaves out; removed: ${ignored.join(', ')}`);
+after = fingerprint(DEST);
 const touched = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((k) => before[k] !== after[k]);
-console.log(touched.length ? `The test run changed files in the folder: ${touched.join(', ')}` : 'The test run added or changed nothing in the folder.');
+console.log(touched.length ? `The test run changed files in the folder: ${touched.join(', ')}` : 'The test run added or changed nothing else in the folder.');
 
 // ---------- 3. the scan ----------
 step('Scanning names and contents');

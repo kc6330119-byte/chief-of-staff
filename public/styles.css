@@ -987,6 +987,7 @@ th[aria-sort="ascending"] .sort-icon, th[aria-sort="descending"] .sort-icon { op
 .agent-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
 .agent-head .agent-name { margin: 0; font-size: 17px; }
 .agent-file { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.agent-kind { margin: 2px 0 0; color: var(--accent); font-size: 13px; font-weight: 600; }
 .badge { flex: none; padding: 4px 10px; border-radius: var(--radius-chip); font-size: 12px; font-weight: 700; line-height: 16px; white-space: nowrap; }
 .badge-ok { background: var(--neutral-bg); color: var(--neutral); }
 .badge-due { background: var(--late-bg); color: var(--late); }

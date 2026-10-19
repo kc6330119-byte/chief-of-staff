@@ -1,4 +1,4 @@
-// CLAUDE.md (the coach) and .claude/agents/*.md for the read-only Agents page.
+// CLAUDE.md (the coach), .claude/agents/*.md and .claude/skills/*/SKILL.md for the read-only Agents page.
 use std::sync::LazyLock;
 
 use serde_json::{json, Value};
@@ -9,6 +9,7 @@ use crate::paths::Workspace;
 use crate::{js, Error, Warning};
 
 const AGENTS_DIR: &str = ".claude/agents";
+const SKILLS_DIR: &str = ".claude/skills";
 pub const REVIEW_AFTER_DAYS: i64 = 30;
 
 /// "negotiation-prep" -> "Negotiation prep", the form books.json uses in "used_by".
@@ -102,7 +103,9 @@ fn parse_instruction_file(ws: &Workspace, rel: &str, fallback_name: &str) -> Res
 
     let name = fm.get("name").filter(|n| !n.is_empty()).unwrap_or(fallback_name).to_string();
     if name.is_empty() { warn(format!("name {COULD_NOT_READ}")); }
-    let purpose = labelled_line(body, "Purpose");
+    // A skill with no "Purpose:" line shows its description, which is what Claude reads to choose it.
+    let purpose = labelled_line(body, "Purpose").filter(|p| !p.is_empty())
+        .or_else(|| rel.starts_with(SKILLS_DIR).then(|| fm.get("description")).flatten().filter(|d| !d.is_empty()).map(str::to_string));
     let sources = labelled_line(body, "Sources");
     let reviewed_raw = labelled_line(body, "Last reviewed");
     let last_reviewed = parse_reviewed(reviewed_raw.as_deref());
@@ -158,11 +161,23 @@ pub fn load_agents(ws: &Workspace) -> Result<Value, Error> {
         cards.push(card);
     }
 
+    // Each skill is a folder holding SKILL.md; it is run as /<its name>.
+    let skills = ws.list_dir(SKILLS_DIR, "")?.unwrap_or_default();
+    for dir in &skills {
+        let rel = format!("{SKILLS_DIR}/{dir}/SKILL.md");
+        if !ws.exists(&rel)? { continue; }
+        let mut card = parse_instruction_file(ws, &rel, dir)?;
+        card["role"] = json!("skill");
+        card["command"] = card["id"].as_str().map_or(Value::Null, |id| json!(format!("/{id}")));
+        cards.push(card);
+    }
+
     for c in &cards { warnings.extend(c["warnings"].as_array().unwrap().iter().cloned()); }
     Ok(json!({
         "cards": cards,
         "agentsFolderFound": files.is_some(),
         "agentsFolder": AGENTS_DIR,
+        "skillsFolder": SKILLS_DIR,
         "today": today_iso(),
         "reviewAfterDays": REVIEW_AFTER_DAYS,
         "warnings": warnings,
@@ -180,7 +195,8 @@ pub struct AgentSummary {
 pub fn agent_summaries(ws: &Workspace) -> Result<Vec<AgentSummary>, Error> {
     static NOTES: LazyLock<regex::Regex> = LazyLock::new(|| js::re(r"\blibrary\/[\w.-]+\.md\b", ""));
     let agents = load_agents(ws)?;
-    Ok(agents["cards"].as_array().unwrap().iter().filter(|c| c["name"].as_str().is_some_and(|n| !n.is_empty())).map(|c| {
+    // A skill is not one of the readers a book names.
+    Ok(agents["cards"].as_array().unwrap().iter().filter(|c| c["role"] != "skill" && c["name"].as_str().is_some_and(|n| !n.is_empty())).map(|c| {
         let sources = c["sources"].as_str();
         let mut notes_files: Vec<String> = Vec::new();
         for m in NOTES.find_iter(sources.unwrap_or("")) {

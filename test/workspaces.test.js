@@ -44,9 +44,10 @@ This section is for the first run only. When the manager types "Set up my worksp
    are called.
 2. Write people.md from the answers: the header row, the manager's own row marked "me",
    then one row per person, with names spelled exactly as given.
-3. In this file and in every agent in .claude/agents/, replace "the manager" with the
-   manager's first name where it names them, keeping the grammar right. Put the company
-   name in templates/meeting-summary-template.md in place of <Company>.
+3. In this file, in every agent in .claude/agents/ and in the review-transcript skill in
+   .claude/skills/, replace "the manager" with the manager's first name where it names
+   them, keeping the grammar right. Put the company name in
+   templates/meeting-summary-template.md in place of <Company>.
 4. Offer to start a goals file in goals/ for each report. Write only what the manager
    tells you.
 5. List every file you changed and what changed in each. Then delete this "Setting up
@@ -125,9 +126,10 @@ describe('the starter workspace', () => {
 });
 
 describe('the coach in both workspaces', () => {
-  test('both CLAUDE.md files have the Dates section with the new naming rule', () => {
+  // 0.4.0 step 2: Dates moved, word for word, to the review-transcript skill.
+  test('both review-transcript skills have the Dates section with the new naming rule', () => {
     for (const dir of [SAMPLE, STARTER]) {
-      const claude = read(dir, 'CLAUDE.md');
+      const claude = read(dir, '.claude/skills/review-transcript/SKILL.md');
       const dates = claude.split(/^## Dates$/m)[1]?.split(/^## /m)[0];
       assert.ok(dates, `${dir}: a Dates section`);
       assert.ok(flat(dates).includes(DATES_RULE), dir);
@@ -177,11 +179,11 @@ describe('the app on a copy of the starter', () => {
     assert.doesNotMatch(site.output(), /could not read/i);
   });
 
-  test('is not the sample: no demo badge, no meetings, the coach and five agents on the Agents page', async () => {
+  test('is not the sample: no demo badge, no meetings, the coach, five agents and the skill on the Agents page', async () => {
     assert.equal((await site.api.config()).demo, false);
     assert.deepEqual(await site.api.meetings(), []);
     const { cards } = await site.api.agents();
-    assert.deepEqual(cards.map((c) => c.name), ['Coach', 'Blind spot check', 'Commitment tracker', 'Negotiation prep', 'One on one prep', 'Risk radar']);
+    assert.deepEqual(cards.map((c) => c.name), ['Coach', 'Blind spot check', 'Commitment tracker', 'Negotiation prep', 'One on one prep', 'Risk radar', 'Review transcript']);
   });
 
   test('"Rules learned" shows an empty log, not a missing-file notice, and an entry added there is saved', async () => {

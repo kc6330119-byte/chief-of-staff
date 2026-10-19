@@ -12,6 +12,8 @@ import { SITE_DIR, startSite } from './helpers/site.js';
 const SAMPLE = path.join(SITE_DIR, 'sample-workspace');
 const AGENT_FILES = ['blind-spot-check.md', 'commitment-tracker.md', 'negotiation-prep.md', 'one-on-one-prep.md', 'risk-radar.md'];
 const NAMES = ['Coach', 'Blind spot check', 'Commitment tracker', 'Negotiation prep', 'One on one prep', 'Risk radar'];
+// 0.4.0 step 2: the review-transcript skill has a card after the agents. It is not one of the Library's readers.
+const CARDS = [...NAMES, 'Review transcript'];
 
 // The cards as drawn, one string per card.
 const cardsOf = (html) => html.split(/<article class="agent-card\b/).slice(1).map((c) => c.split('</article>')[0]);
@@ -45,9 +47,9 @@ describe('the Agents page and the Library with five agents', () => {
   before(async () => { site = await startSite(); });
   after(async () => { await site?.stop(); });
 
-  test('the coach and five agents, every field read, nothing it could not read', async () => {
+  test('the coach, five agents and the skill, every field read, nothing it could not read', async () => {
     const view = await site.api.agents();
-    assert.deepEqual(view.cards.map((c) => c.name), NAMES);
+    assert.deepEqual(view.cards.map((c) => c.name), CARDS);
     assert.deepEqual(view.warnings, []);
     for (const c of view.cards) assert.ok(c.purposeHtml && c.sourcesHtml && c.lastReviewed && c.rulesHtml.length, `${c.name} has every field`);
   });

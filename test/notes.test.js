@@ -721,11 +721,17 @@ describe('the sample', () => {
     assert.match(claude, /^Sources: .*, notes\/notes\.json$/m);
   });
 
-  test('the Agents page reads the coach as before: the same rules, nothing it could not read', async () => {
+  // 0.4.0 step 2: the coach's rules are its five Standing rules; the review steps are the review-transcript skill's.
+  test('the Agents page reads the coach\'s Standing rules and the skill\'s review steps, nothing it could not read', async () => {
     const site = await startSite();
     try {
-      const coach = (await site.api.agents()).cards.find((c) => c.role === 'coach');
-      assert.equal(coach.rulesHtml.length, 8);
+      const { cards } = await site.api.agents();
+      const coach = cards.find((c) => c.role === 'coach');
+      assert.equal(coach.rulesCaption, 'Standing rules');
+      assert.equal(coach.rulesHtml.length, 5);
+      const skill = cards.find((c) => c.role === 'skill');
+      assert.equal(skill.rulesCaption, 'When Kevin asks you to review a transcript');
+      assert.equal(skill.rulesHtml.length, 9);
       assert.deepEqual((await site.api.agents()).warnings, []);
     } finally {
       await site.stop();

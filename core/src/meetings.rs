@@ -670,18 +670,28 @@ pub fn action_item_owners<'a>(rows: impl Iterator<Item = &'a Value>) -> Vec<Stri
     owners
 }
 
+/// The ledger's items, for the chips, columns and "Closed" dates; or, when it can't be read, the warning that names it.
+fn ledger_entries(ws: &Workspace) -> Result<Result<serde_json::Map<String, Value>, Warning>, Error> {
+    Ok(match ledger::load(ws)? {
+        ledger::Loaded::Missing => Ok(serde_json::Map::new()),
+        ledger::Loaded::Ok(l) => Ok(l["items"].as_object().cloned().unwrap_or_default()),
+        ledger::Loaded::Unreadable(why) => Err(Warning::new(ledger::FILE, format!("{COULD_NOT_READ}: {why}, so no chips or \"Closed\" dates are shown"))),
+    })
+}
+
+/// Everything the Meetings page lists as could not be read, in its order.
+pub fn could_not_read(ws: &Workspace, demo: bool) -> Result<Vec<Warning>, Error> {
+    Ok(overview(ws, demo)?.warnings.into_iter().chain(ledger_entries(ws)?.err()).collect())
+}
+
 pub fn meetings_overview(ws: &Workspace, demo: bool) -> Result<Value, Error> {
     let o = overview(ws, demo)?;
     let mut warnings = o.warnings;
     // A row that is on the Board shows its card's chip and its column, and an item closed in the ledger its "closed"
     // date. A ledger that can't be read is named, and no chip, column or date is shown.
-    let entries = match ledger::load(ws)? {
-        ledger::Loaded::Missing => Some(serde_json::Map::new()),
-        ledger::Loaded::Ok(l) => Some(l["items"].as_object().cloned().unwrap_or_default()),
-        ledger::Loaded::Unreadable(why) => {
-            warnings.push(Warning::new(ledger::FILE, format!("{COULD_NOT_READ}: {why}, so no chips or \"Closed\" dates are shown")));
-            None
-        }
+    let entries = match ledger_entries(ws)? {
+        Ok(entries) => Some(entries),
+        Err(warning) => { warnings.push(warning); None }
     };
     let tracked: Vec<Value> = o.rows.into_iter().map(|r| {
         let card = match (&entries, r.usable) {
@@ -701,6 +711,7 @@ pub fn meetings_overview(ws: &Workspace, demo: bool) -> Result<Value, Error> {
         "owners": action_item_owners(tracked.iter()),
         "tracked": tracked,
         "peopleFile": { "file": PEOPLE_FILE, "fileFound": o.people.found },
+        "warningGroups": crate::group_warnings(&warnings).iter().map(|g| g.to_json()).collect::<Vec<_>>(),
         "warnings": warnings,
     }))
 }

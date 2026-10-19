@@ -115,7 +115,7 @@ fn tell(app: &AppHandle, kind: MessageDialogKind, message: &str) {
 
 /// A folder with none of the files the app reads is probably the wrong one; a change on the Board would
 /// create actions/ledger.json there, and a note notes/notes.json, so ask first.
-fn looks_like_workspace(folder: &Path) -> bool {
+pub(crate) fn looks_like_workspace(folder: &Path) -> bool {
     ["meeting-notes", "CLAUDE.md", "library/books.json", ".claude/agents", "corrections/corrections.json", "actions/ledger.json", "notes/notes.json"]
         .iter().any(|p| folder.join(p).exists())
 }

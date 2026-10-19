@@ -1,7 +1,7 @@
 // npm run check:release: proves the .dmg made by `npm run package` and the app inside it (SPEC.md, decision 69).
 // One line per check; the exit code is 1 if any fails. The app checked is the copy inside the .dmg, which is
 // what people download. Gatekeeper and the staple checks may ask Apple's servers; nothing is uploaded.
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -12,6 +12,45 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONF = JSON.parse(fs.readFileSync(path.join(REPO, 'app', 'tauri.conf.json'), 'utf8'));
 const sh = (cmd, args) => spawnSync(cmd, args, { encoding: 'utf8' });
 const both = (r) => `${r.stdout}${r.stderr}`;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const PKG = JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8'));
+
+// window-id (as in the app check) tells whether a process has a window on screen.
+const windowId = path.join(REPO, 'target', 'probe', 'window-id');
+fs.mkdirSync(path.dirname(windowId), { recursive: true });
+if (sh('swiftc', ['-O', '-o', windowId, path.join(REPO, 'tools', 'window-id.swift')]).status !== 0) { console.error('could not build window-id'); process.exit(1); }
+// How many CoreServicesUIAgent processes, which show Gatekeeper's prompts, have a window on screen.
+const promptWindows = () => (sh('pgrep', ['-x', 'CoreServicesUIAgent']).stdout.trim().split('\n').filter(Boolean)
+  .filter((pid) => sh(windowId, [pid, '--bounds']).status === 0).length);
+
+/// Runs `exe` with `args`, looking for a window of its own and for a new Gatekeeper prompt every 20 ms until it
+/// exits. A run still going after `limit` ms is stopped: a prompt waits for an answer, so the run would never end.
+async function watched(exe, args, limit = 20000) {
+  const child = spawn(exe, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (d) => { stdout += d; });
+  child.stderr.on('data', (d) => { stderr += d; });
+  let code = null;
+  const exited = new Promise((r) => child.on('close', (c, signal) => { code = c ?? signal; r(); }));
+  let done = false;
+  exited.then(() => { done = true; });
+  const prompts = promptWindows();
+  const out = { samples: 0, windows: 0, prompts: 0, timedOut: false };
+  const start = Date.now();
+  while (!done && Date.now() - start < limit) {
+    out.samples++;
+    if (sh(windowId, [String(child.pid)]).status === 0) out.windows++;
+    if (promptWindows() > prompts) out.prompts++;
+    await sleep(20);
+  }
+  if (!done) { out.timedOut = true; child.kill(); }
+  await exited;
+  // A prompt shown as the run ended.
+  await sleep(500);
+  if (promptWindows() > prompts) out.prompts++;
+  return { ...out, code, stdout, stderr, ms: Date.now() - start };
+}
 
 if (!fs.existsSync(DMG)) { console.error(`No .dmg at ${path.relative(REPO, DMG)}. Run: npm run package`); process.exit(1); }
 
@@ -76,6 +115,9 @@ try {
   check(`the bundle id is ${CONF.identifier}`, id === CONF.identifier, id);
   const minOs = read('LSMinimumSystemVersion');
   check(`the minimum macOS version is ${CONF.bundle.macOS.minimumSystemVersion}`, minOs === CONF.bundle.macOS.minimumSystemVersion, minOs);
+  const version = read('CFBundleShortVersionString');
+  check(`Info.plist's version is 0.4.0 (CFBundleShortVersionString), as in tauri.conf.json and package.json`,
+    version === '0.4.0' && CONF.version === '0.4.0' && PKG.version === '0.4.0', `${version}; tauri.conf.json ${CONF.version}; package.json ${PKG.version}`);
 
   // 7. The sample inside: the three book-notes files are placeholders, there is no board.json or notes file, and its
   //    ledger is the repository's (0.3.0).
@@ -150,6 +192,54 @@ try {
   // 11. The Help page's text (0.2.0).
   check('the app has help.md, the same as the repository\'s',
     () => fs.readFileSync(path.join(app, 'Contents', 'Resources', 'help.md'), 'utf8') === fs.readFileSync(path.join(REPO, 'help.md'), 'utf8'));
+
+  // 12. The check hook and the review-transcript skill (0.4.0): .claude/settings.json with the one PostToolUse hook,
+  //     .claude/hooks/check-summary.sh, and the skill's files, each as in the repository.
+  const HOOK_FILES = ['.claude/settings.json', '.claude/hooks/check-summary.sh'];
+  for (const [name, shipped] of [['sample', sample], ['starter', starter]]) {
+    const source = path.join(REPO, `${name}-workspace`);
+    const skill = '.claude/skills/review-transcript';
+    check(`the ${name} has .claude/settings.json with the hook, .claude/hooks/check-summary.sh and the review-transcript skill's files, as in the repository`, () => {
+      const settings = JSON.parse(fs.readFileSync(path.join(shipped, '.claude', 'settings.json'), 'utf8'));
+      const hook = JSON.stringify(settings) === JSON.stringify({ hooks: { PostToolUse: [{ matcher: 'Edit|Write', hooks: [{ type: 'command', command: 'sh "$CLAUDE_PROJECT_DIR/.claude/hooks/check-summary.sh"' }] }] } });
+      const skillFiles = fs.readdirSync(path.join(source, skill)).sort();
+      const files = [...HOOK_FILES, ...skillFiles.map((f) => `${skill}/${f}`)];
+      const differ = files.filter((rel) => !fs.existsSync(path.join(shipped, rel)) || !fs.readFileSync(path.join(shipped, rel)).equals(fs.readFileSync(path.join(source, rel))));
+      const extra = [['.claude/hooks', ['check-summary.sh']], [skill, skillFiles]]
+        .filter(([d, want]) => fs.readdirSync(path.join(shipped, d)).sort().join() !== want.join()).map(([d]) => `${d}/`);
+      return [hook && differ.length === 0 && extra.length === 0 && skillFiles.join() === 'SKILL.md,example.md',
+        [hook ? '' : 'settings.json has a different hook', ...differ, ...extra].filter(Boolean).join(', ')];
+    });
+  }
+
+  // 13. The notarized app's check (0.4.0 step 1's check, on the release build): a copy of the app quarantined as a
+  //     download is, run with --check on its own bundled sample. It must print "Nothing could not be read" and exit 0,
+  //     with no window and no Gatekeeper prompt, and leave the sample as it was.
+  const quarantined = path.join(REPO, 'target', 'dist', 'check-quarantine');
+  fs.rmSync(quarantined, { recursive: true, force: true });
+  fs.mkdirSync(quarantined, { recursive: true });
+  try {
+    const copy = path.join(quarantined, path.basename(app));
+    const copied = sh('ditto', [app, copy]);
+    const flag = `0083;${Math.floor(Date.now() / 1000).toString(16)};Safari;`;
+    const marked = copied.status === 0 && sh('xattr', ['-r', '-w', 'com.apple.quarantine', flag, copy]).status === 0;
+    const copyExe = path.join(copy, 'Contents', 'MacOS', 'chief-of-staff');
+    const isQuarantined = marked && sh('xattr', ['-p', 'com.apple.quarantine', copyExe]).stdout.trim() === flag;
+    const copySample = path.join(copy, 'Contents', 'Resources', 'sample-workspace');
+    const sampleFiles = (dir) => { const out = {}; const w = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const a = path.join(d, e.name); if (e.isDirectory()) w(a); else out[path.relative(dir, a)] = fs.readFileSync(a).toString('base64'); } }; w(dir); return out; };
+    const before = isQuarantined ? sampleFiles(copySample) : null;
+    const run = isQuarantined ? await watched(copyExe, ['--check', copySample]) : null;
+    const unchanged = isQuarantined && JSON.stringify(sampleFiles(copySample)) === JSON.stringify(before);
+    check('the quarantined release app, run with --check on its bundled sample, exits 0 and prints "Nothing could not be read"',
+      isQuarantined && run.code === 0 && run.stdout === 'Nothing could not be read\n' && run.stderr === '',
+      isQuarantined ? `exit ${run.code}, stdout ${JSON.stringify(run.stdout.slice(0, 200))}, stderr ${JSON.stringify(run.stderr.slice(0, 200))}` : `the copy could not be quarantined: ${both(copied).trim()}`);
+    check('…opens no window, shows no Gatekeeper prompt, ends by itself and changes nothing in the sample',
+      isQuarantined && run.windows === 0 && run.prompts === 0 && !run.timedOut && unchanged,
+      isQuarantined ? `${run.ms} ms, ${run.samples} samples, ${run.windows} with a window, ${run.prompts} with a prompt${run.timedOut ? ', stopped after 20 s' : ''}${unchanged ? '' : ', the sample changed'}` : 'not run');
+  } finally {
+    fs.rmSync(quarantined, { recursive: true, force: true });
+  }
+
 } finally {
   sh('hdiutil', ['detach', mount]);
   fs.rmSync(mount, { recursive: true, force: true });

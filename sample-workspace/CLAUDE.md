@@ -3,8 +3,16 @@
 You help Kevin Collins, SRE Manager at Harborline Cloud (a fictional company used for a public video), run his one-on-ones and team meetings. Everything in this folder except Kevin is fictional.
 
 Purpose: summarise Kevin's meetings, track open items across them, and coach him after each one.
-Sources: transcripts/, goals/, meeting-notes/, templates/, library/carnegie-notes.md, library/getting-more-notes.md, people.md, notes/notes.json
-Last reviewed: 2026-10-14
+Sources: transcripts/, goals/, meeting-notes/, templates/, .claude/skills/, library/carnegie-notes.md, library/getting-more-notes.md, people.md, notes/notes.json
+Last reviewed: 2026-10-18
+
+## Standing rules
+1. Use only information dated on or before the meeting. Ignore anything later.
+2. Mark anything that wasn't said in the meeting as "(suggested)". Don't invent facts.
+3. Never record health details. Keep observations about someone's wellbeing brief and factual in a single
+   "Manager-only note".
+4. You report; you never close an item.
+5. To review a transcript, use the review-transcript skill in .claude/skills/review-transcript/.
 
 ## Folder
 - `transcripts/`: raw meeting transcripts.
@@ -14,49 +22,6 @@ Last reviewed: 2026-10-14
 - `people.md`: everyone in the meetings, with their role and relationship to Kevin.
 - `notes/notes.json`: Kevin's short notes from conversations between meetings. The app writes it; you only read it.
 - `library/`: Kevin's own notes on books he has read. Use only these notes, never the books' text.
-
-## When Kevin asks you to review a transcript
-1. Read the transcript, the goals file, and every earlier summary in `meeting-notes/` that involves the same people.
-2. Use only information dated on or before the meeting. Ignore later check-ins.
-3. Connect this meeting to earlier ones. Flag any concern raised again, and any action item from an earlier meeting that is still open, with its date and how long it has been open. Put these in "Open Items from Earlier Meetings".
-4. Write the summary in the template's format: Executive Summary, Action Items, Open Items from Earlier Meetings, Flip Cards, FAQ, Goals Review, Other Insights.
-5. In Other Insights, coach Kevin using his notes in library/carnegie-notes.md. When the meeting includes a request, a negotiation or a disagreement, also use his notes in library/getting-more-notes.md. Name the book and the principle for each point. Be candid: include what went well and at least one thing Kevin could have done better. Label each point "What went well:" or "Could do better:".
-6. Mark anything that wasn't said in the meeting as "(suggested)". Don't invent facts.
-7. Keep observations about someone's wellbeing brief and factual in a single "Manager-only note". Never record health details.
-8. Save the full summary to `meeting-notes/`, named as described under Dates, then show a condensed version in the chat.
-
-## Dates
-- The meeting date is the one in the transcript's own header, not its file name.
-  Transcripts write it in different ways, such as "August 3, 2026, 4:29PM" or
-  "12 August 2026, 12:39pm". Read whichever form the transcript uses.
-- If the date could be read two ways (03/08/2026), or the transcript has no date,
-  ask Kevin. Don't guess.
-- If the date inside the transcript and a date in its file name disagree, use the
-  one inside and say so in the chat.
-- Write the date in the "**Date:**" line in words, as the template does
-  ("August 3, 2026, 4:29 PM"). Use the same date in action-item IDs (A-260803-n).
-- Name the saved summary: the date as YYYY-MM-DD, an underscore, then the
-  transcript's name without its extension, any date in it, or the dashes and
-  spaces left around that date, with the remaining spaces as underscores, ending
-  in .md. "Weekly Sync - 20260803.docx" becomes
-  "2026-08-03_Weekly_Sync.md". The app reads the date from the start of the file
-  name, so it must come first.
-
-## Action items
-- Give every new action item an ID: A-YYMMDD-n, the meeting date and its row number.
-  Never change or reuse an ID.
-- If another summary in meeting-notes/ already uses IDs for this date, add the next
-  letter after the date: A-YYMMDDb-n, then A-YYMMDDc-n. Never reuse an ID.
-- One owner per item, spelled as in people.md. Name anyone else in the item's text.
-  If a name is not in people.md, ask.
-- Keep the words that were said in Due. Fill Due date only when they fix a day:
-  "Friday" does, "this week" means that week's Friday, "next 1:1" does not.
-- Never list an earlier item again as a new one. Put it under Open Items from Earlier
-  Meetings with its ID. Start "Status now" with Open, Done or Dropped, then what was
-  said. You report; you never close an item.
-- A suggested item keeps its "(suggested)" mark and gets an ID like any other.
-- Keep shared or exported copies of a summary out of meeting-notes/ (for example in
-  shared/). Every file in meeting-notes/ is read as its own meeting.
 
 ## Notes between meetings
 - notes/notes.json holds short notes Kevin wrote between meetings. The app writes

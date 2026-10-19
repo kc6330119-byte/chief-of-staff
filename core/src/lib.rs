@@ -88,6 +88,40 @@ impl Warning {
     }
 }
 
+/// The warnings of one kind, as Meetings lists them and the app's check mode reports them.
+#[derive(Debug, Clone)]
+pub struct WarningGroup {
+    pub kind: String,
+    pub warnings: Vec<Warning>,
+}
+
+impl WarningGroup {
+    /// { kind, count, warnings: [{ file, message }] }
+    pub fn to_json(&self) -> Value {
+        json!({
+            "kind": self.kind,
+            "count": self.warnings.len(),
+            "warnings": self.warnings.iter().map(|w| json!({ "file": w.file, "message": w.message })).collect::<Vec<_>>(),
+        })
+    }
+}
+
+/// Warnings grouped by kind, most first; kinds with the same count keep the order they were first found in. A warning
+/// with no kind is its own kind.
+pub fn group_warnings(warnings: &[Warning]) -> Vec<WarningGroup> {
+    let mut groups: Vec<WarningGroup> = Vec::new();
+    for w in warnings {
+        let kind = w.kind.as_deref().unwrap_or(&w.message);
+        match groups.iter_mut().find(|g| g.kind == kind) {
+            Some(g) => g.warnings.push(w.clone()),
+            None => groups.push(WarningGroup { kind: kind.to_string(), warnings: vec![w.clone()] }),
+        }
+    }
+    // A stable sort.
+    groups.sort_by(|a, b| b.warnings.len().cmp(&a.warnings.len()));
+    groups
+}
+
 /// A template's message and kind: each "{}" filled in turn with `parts`, and each written "…".
 pub fn fill(template: &str, parts: &[&str]) -> (String, String) {
     let mut message = String::new();
@@ -297,6 +331,12 @@ impl Core {
     /// The sample workspace carries the marker file.
     pub fn demo(&self) -> bool {
         self.ws.resolve(SAMPLE_MARKER).is_ok_and(|p| p.is_file())
+    }
+
+    /// What the Meetings page lists as could not be read, and Today's foot counts. For the app's check mode.
+    pub fn could_not_read(&self) -> Result<Vec<Warning>, Error> {
+        let _one_at_a_time = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        meetings::could_not_read(&self.ws, self.demo())
     }
 
     fn log_warnings(&self, warnings: &Value) {
@@ -524,6 +564,27 @@ fn percent_decode(s: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn warnings_group_by_kind_most_first_and_ties_keep_their_order() {
+        let warnings = [
+            Warning::new("a.md", "attendees could not read"),
+            Warning::varied("a.md", "ID \"{}\" is not in the form A-YYMMDD-n", &["A-1"]),
+            Warning::new("b.md", "meeting type could not read"),
+            Warning::varied("b.md", "ID \"{}\" is not in the form A-YYMMDD-n", &["A-2"]),
+            Warning::new("c.md", "attendees could not read"),
+        ];
+        let groups: Vec<(String, Vec<String>)> = group_warnings(&warnings).into_iter()
+            .map(|g| (g.kind, g.warnings.into_iter().map(|w| format!("{}: {}", w.file, w.message)).collect())).collect();
+        assert_eq!(groups, [
+            ("attendees could not read".into(), vec!["a.md: attendees could not read".into(), "c.md: attendees could not read".into()]),
+            ("ID \"…\" is not in the form A-YYMMDD-n".into(), vec!["a.md: ID \"A-1\" is not in the form A-YYMMDD-n".into(), "b.md: ID \"A-2\" is not in the form A-YYMMDD-n".into()]),
+            ("meeting type could not read".into(), vec!["b.md: meeting type could not read".into()]),
+        ]);
+        assert_eq!(group_warnings(&warnings)[0].to_json(), json!({ "kind": "attendees could not read", "count": 2, "warnings": [
+            { "file": "a.md", "message": "attendees could not read" }, { "file": "c.md", "message": "attendees could not read" },
+        ] }));
+    }
 
     #[test]
     fn help_md_renders_whole() {

@@ -68,26 +68,18 @@ function warningsPanel(warnings) {
     </details>`;
 }
 
-// Meetings groups its warnings by kind, the message without the part that varies (an ID, a cell's text), most
-// first; each group opens to its files and messages. The first line still counts every warning, as Today's last
-// line does. A warning with no kind is its own kind.
-function groupedWarningsPanel(warnings) {
+// Meetings shows its warnings in the groups the core makes (group_warnings, which the app's check mode also uses):
+// by kind, the message without the part that varies (an ID, a cell's text), most first; each group opens to its
+// files and messages. The first line still counts every warning, as Today's last line does.
+function groupedWarningsPanel(warnings, groups) {
   if (!warnings?.length) return '';
-  const groups = new Map();
-  for (const w of warnings) {
-    const kind = w.kind || w.message;
-    if (!groups.has(kind)) groups.set(kind, []);
-    groups.get(kind).push(w);
-  }
-  // A stable sort: kinds with the same count keep the order they were first found in.
-  const sorted = [...groups].sort((a, b) => b[1].length - a[1].length);
   return `
     <details class="notice notice-warn" id="meetings-warnings">
       <summary><strong>${warnings.length} thing${warnings.length === 1 ? '' : 's'} could not be read.</strong> Shown as "could not read" below, grouped by kind.</summary>
-      <ul class="warning-groups">${sorted.map(([kind, ws]) => `
+      <ul class="warning-groups">${groups.map((g) => `
         <li><details class="warning-group">
-          <summary><span class="warning-count">${ws.length}</span> ${esc(kind)}</summary>
-          <ul>${ws.map((w) => `<li><code>${esc(w.file)}</code>: ${esc(w.message)}</li>`).join('')}</ul>
+          <summary><span class="warning-count">${g.count}</span> ${esc(g.kind)}</summary>
+          <ul>${g.warnings.map((w) => `<li><code>${esc(w.file)}</code>: ${esc(w.message)}</li>`).join('')}</ul>
         </details></li>`).join('')}
       </ul>
     </details>`;
@@ -1203,7 +1195,7 @@ async function renderMeetings(params = {}) {
       <h1>Meetings</h1>
       ${privateSwitch()}
     </div>
-    ${groupedWarningsPanel(data.warnings)}
+    ${groupedWarningsPanel(data.warnings, data.warningGroups)}
     ${peopleMissing}
 
     <section class="panel" aria-labelledby="tracked-h">
@@ -2438,7 +2430,7 @@ async function renderAgents() {
       <div class="section-head">
         <div>
           <h2 id="agents-h">Agents and the coach</h2>
-          <p class="muted">Read-only. From <code>CLAUDE.md</code> and <code>${esc(data.agentsFolder)}/</code>. “Review due” after ${data.reviewAfterDays} days.</p>
+          <p class="muted">Read-only. From <code>CLAUDE.md</code>, <code>${esc(data.agentsFolder)}/</code> and <code>${esc(data.skillsFolder)}/</code>. “Review due” after ${data.reviewAfterDays} days.</p>
         </div>
       </div>
       ${warningsPanel(data.warnings)}
@@ -2456,6 +2448,7 @@ async function renderAgents() {
               <header class="agent-head">
                 <div>
                   <h3 class="agent-name">${c.name ? esc(c.name) : COULD_NOT_READ}</h3>
+                  ${c.role === 'skill' ? `<p class="agent-kind">Skill${c.command ? ` · ${esc(c.command)}` : ''}</p>` : ''}
                   <p class="agent-file"><code>${esc(c.file)}</code>${c.role === 'coach' ? ' · the coach' : ''}</p>
                 </div>
                 ${badge}

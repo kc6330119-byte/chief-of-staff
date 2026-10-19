@@ -1,11 +1,14 @@
 // 0.3.3: two rules for the coach, in the sample's and the starter's CLAUDE.md: a letter after the date for a second
 // meeting's IDs on the same day, and shared copies of a summary kept out of meeting-notes/. Nothing else in either file
 // changes apart from "Last reviewed", and the app answers for the sample exactly as it did in 0.3.2.
+// 0.4.0 step 2 moved the Action items rules, these two with them, into the review-transcript skill: the rules are read
+// there now, and the step 1 CLAUDE.md that 0.3.2 is compared with is rebuilt from CLAUDE.md and the skill.
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
+import { claudeAsInStep1, SKILL } from './helpers/coach.js';
 import { SITE_DIR, startSite } from './helpers/site.js';
 
 const SAMPLE = path.join(SITE_DIR, 'sample-workspace');
@@ -29,28 +32,31 @@ const SHA_032 = {
   starter: '0986827e495ba568943bc23467e30f20ac77dded71ab835cc03efde8772e1d33',
 };
 
-const read = (dir) => fs.readFileSync(path.join(dir, 'CLAUDE.md'), 'utf8');
+// CLAUDE.md as 0.3.3 and step 1 had it.
+const read = (dir) => claudeAsInStep1(dir);
 const sha = (text) => crypto.createHash('sha256').update(text).digest('hex');
 // The file without the two new lines and with 0.3.2's "Last reviewed".
 const as032 = (text) => text.replace(LETTER_RULE, '').replace(SHARED_RULE, '').replace(REVIEWED_033, REVIEWED_032);
-// The "## Action items" section, up to the next heading.
-const actionItems = (text) => text.match(/^## Action items\n[\s\S]*?(?=^## )/m)[0];
+// The "## Action items" section, up to the next heading or the end.
+const actionItems = (text) => text.match(/^## Action items\n[\s\S]*?(?=^## |(?![\s\S]))/m)[0];
+const skill = (dir) => fs.readFileSync(path.join(dir, SKILL), 'utf8');
 
-describe('both CLAUDE.md files have the two rules, and nothing else changed', () => {
+describe('both review-transcript skills have the two rules, and CLAUDE.md before step 2 had nothing else changed', () => {
   for (const [name, dir] of [['sample', SAMPLE], ['starter', STARTER]]) {
-    test(`${name}: the letter rule comes right after the ID rule, and the shared-copies rule ends Action items`, () => {
-      const section = actionItems(read(dir));
+    test(`${name}: in the skill, the letter rule comes right after the ID rule, and the shared-copies rule ends Action items`, () => {
+      const section = actionItems(skill(dir));
       assert.ok(section.includes(ID_RULE + LETTER_RULE), section);
-      assert.ok(section.endsWith(SHARED_RULE + '\n'), section);
-      assert.equal(read(dir).split(LETTER_RULE).length, 2);
-      assert.equal(read(dir).split(SHARED_RULE).length, 2);
+      assert.ok(section.endsWith(SHARED_RULE), section);
+      assert.equal(skill(dir).split(LETTER_RULE).length, 2);
+      assert.equal(skill(dir).split(SHARED_RULE).length, 2);
+      assert.equal(fs.readFileSync(path.join(dir, 'CLAUDE.md'), 'utf8').includes(LETTER_RULE), false, 'no longer in CLAUDE.md');
     });
 
-    test(`${name}: "Last reviewed" is 2026-10-14`, () => {
+    test(`${name}: "Last reviewed" was 2026-10-14`, () => {
       assert.match(read(dir), /^Last reviewed: 2026-10-14$/m);
     });
 
-    test(`${name}: without the two lines and with 0.3.2's "Last reviewed", the file is 0.3.2's byte for byte`, () => {
+    test(`${name}: without the two lines and with 0.3.2's "Last reviewed", the file was 0.3.2's byte for byte`, () => {
       assert.equal(sha(as032(read(dir))), SHA_032[name]);
     });
   }
@@ -79,14 +85,19 @@ async function everyAnswer(site) {
   return out;
 }
 
-describe('the sample\'s answers from every API are 0.3.2\'s', () => {
-  const put = (text) => (root) => fs.writeFileSync(path.join(root, 'CLAUDE.md'), text);
+describe('the sample\'s answers from every API, with step 1\'s CLAUDE.md, are 0.3.2\'s', () => {
+  // Step 1's CLAUDE.md and no .claude/skills/ or settings.json: the sample as 0.3.3 shipped it.
+  const put = (text) => (root) => {
+    fs.writeFileSync(path.join(root, 'CLAUDE.md'), text);
+    fs.rmSync(path.join(root, '.claude', 'skills'), { recursive: true });
+    fs.rmSync(path.join(root, '.claude', 'settings.json'));
+  };
   let now;
   let old;
   let oldToday;
   before(async () => {
     const sites = [
-      await startSite(),
+      await startSite({ prepare: put(read(SAMPLE)) }),
       await startSite({ prepare: put(as032(read(SAMPLE))) }),
       // 0.3.2's file with only "Last reviewed" moved to 0.3.3's date.
       await startSite({ prepare: put(as032(read(SAMPLE)).replace(REVIEWED_032, REVIEWED_033)) }),

@@ -16,7 +16,7 @@
 //     and Agents (with "Rules learned") are drawn with nothing overflowing and nothing cut off, and People's columns
 //     line up whether or not a row has a flag; #/corrections opens
 //     Agents at "Rules learned"
-//   - Agents shows the coach and every agent file (five in the sample); each card's rules start closed behind
+//   - Agents shows the coach, every agent file (five in the sample) and every skill; each card's rules start closed behind
 //     "Rules (N)", a click opens one card and leaves the others closed, and all are closed again after a page load;
 //     screenshots of the page with every card closed and with one open
 //   - Meetings (0.3.2): the warnings are grouped by kind, most first, each with its count, and each group opens to its
@@ -313,13 +313,18 @@ const wsChanged = changed(wsBefore, wsAfter).filter((k) => !k.endsWith('/'));
 let savedNotes = [];
 try { savedNotes = JSON.parse(fs.readFileSync(path.join(WS, 'notes', 'notes.json'), 'utf8')).notes; } catch { /* reported below */ }
 const csp = one('csp');
-// The cards the Agents page should show: the coach, then each agent file in name order, named as the core names them
-// (the name: line, hyphens as spaces, first letter capital).
-const agentNames = ['Coach', ...fs.readdirSync(path.join(WS, '.claude', 'agents')).filter((f) => f.endsWith('.md')).sort().map((f) => {
-  const name = fs.readFileSync(path.join(WS, '.claude', 'agents', f), 'utf8').match(/^---\n[^]*?^name:\s*(.+)$/m)?.[1].trim() || f.slice(0, -3);
+// The cards the Agents page should show: the coach, then each agent file in name order, then each skill folder's
+// SKILL.md in name order, named as the core names them (the name: line, hyphens as spaces, first letter capital).
+const cardName = (file, fallback) => {
+  const name = fs.readFileSync(file, 'utf8').match(/^---\n[^]*?^name:\s*(.+)$/m)?.[1].trim() || fallback;
   const spaced = name.replace(/[-_]+/g, ' ').trim();
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-})];
+};
+const skillsDir = path.join(WS, '.claude', 'skills');
+const skillNames = (fs.existsSync(skillsDir) ? fs.readdirSync(skillsDir).sort() : [])
+  .filter((d) => fs.existsSync(path.join(skillsDir, d, 'SKILL.md'))).map((d) => cardName(path.join(skillsDir, d, 'SKILL.md'), d));
+const agentNames = ['Coach', ...fs.readdirSync(path.join(WS, '.claude', 'agents')).filter((f) => f.endsWith('.md')).sort()
+  .map((f) => cardName(path.join(WS, '.claude', 'agents', f), f.slice(0, -3))), ...skillNames];
 const agentCards = one('agent-cards');
 // The check's header has no "Prior context" line, so that field shows "could not read", as on the other check meetings.
 const ODD_FIELDS = ['Date: October 13, 2026', 'Duration: 1m', 'Attendees: Kevin Collins, Sam Ortiz', 'Company: Harborline Cloud', 'Type: 1:1', 'Prior context: could not read'];
@@ -395,7 +400,7 @@ const checklist = {
     && one('corrections-moved')?.scrolled > 0 && one('corrections-moved')?.ids.length === 0
     // At the top of the window, or as far down as the page goes when the section is shorter than the window.
     && (Math.abs(one('corrections-moved')?.rulesTop ?? 999) < 80 || one('corrections-moved')?.scrolled >= one('corrections-moved')?.maxScroll - 1)),
-  [`Agents shows the coach and ${agentNames.length - 1} agents (five in the sample): ${agentNames.join(', ')}`]: verdict(
+  [`Agents shows the coach, ${agentNames.length - 1 - skillNames.length} agents (five in the sample) and ${skillNames.length} skill${skillNames.length === 1 ? '' : 's'}: ${agentNames.join(', ')}`]: verdict(
     agentCards?.closed.map((c) => c.name).join() === agentNames.join()),
   'Agents: every card\'s rules start closed behind "Rules (N)", N the number of rules': verdict(
     agentCards?.closed.length > 0 && agentCards.closed.every((c) => c.open === false && !c.rulesShown && c.rules > 0 && c.summary === `Rules (${c.rules})`)),

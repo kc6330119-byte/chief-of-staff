@@ -10,11 +10,11 @@ A Rust core reads and writes the files and answers every request. The interface 
 JavaScript inside a native macOS window (the system's own WebKit, through Tauri). There is no server, no
 browser and no network port.
 
-Version 0.3.3, built from Mission Control Native 0.1.1.
+Version 0.4.0, built from Mission Control Native 0.1.1.
 
 ## Download
 
-Download `Chief-of-Staff-for-Managers-0.3.3-universal.dmg` from [the latest release][latest]. It runs on
+Download `Chief-of-Staff-for-Managers-0.4.0-universal.dmg` from [the latest release][latest]. It runs on
 macOS 13 or later, on Apple silicon and Intel Macs.
 
 1. Open the `.dmg`. A window shows the app and a shortcut to Applications.
@@ -50,11 +50,12 @@ a workspace before it opens it.
 ## Start your own workspace
 
 1. Choose File ▸ New Workspace…, or click **New Workspace…** on the welcome window, and name the folder. The
-   app makes it and opens it. It holds the coach, the five agents, the summary template, the placeholder book
-   notes, an empty corrections log and a `people.md` with one row for you, and nothing from the sample.
+   app makes it and opens it. It holds the coach, the five agents, the review-transcript skill, the hook that
+   checks each summary, the summary template, the placeholder book notes, an empty corrections log and a
+   `people.md` with one row for you, and nothing from the sample.
 2. In Terminal, go to the new folder, start `claude` and type `Set up my workspace`. The coach asks for your
    name, role, company and the people you meet with, then writes `people.md` and puts your name and company
-   in the coach, the agents and the template.
+   in the coach, the agents, the skill and the template.
 
 Then start a new Claude Code session in the folder.
 
@@ -90,7 +91,8 @@ started, everyday use, an FAQ and troubleshooting. `help.md` in this repository 
   and a busy week (three or more of their open items past due or due within seven days). Names in the summaries that are not
   in `people.md` are listed below. One person's page has what they owe you, what you owe them (with Close and
   Re-date), "Notes between meetings" and the meetings they attended.
-- **Agents**: the coach (`CLAUDE.md`) and each agent in `.claude/agents/`, read-only, with a "Review due" mark
+- **Agents**: the coach (`CLAUDE.md`), each agent in `.claude/agents/` and each skill in `.claude/skills/`
+  (marked "Skill", with its command, such as `/review-transcript`), read-only, with a "Review due" mark
   after 30 days. The rules on each card are collapsed until you open them: click "Rules (N)", or use the
   keyboard. Each card opens on its own, and all are closed again when the page loads. Below them, "Rules learned": the corrections log, where you add a correction.
 - **Library**: your books, your ratings and your own notes. The sample contains no text from any book, and
@@ -130,12 +132,39 @@ and signed in.
 2. `CLAUDE.md` is the coach. It is active as soon as the session opens. The agents are the files in
    `.claude/agents/`; the sample has five, described in "The agents" below. To see which ones a
    session has, ask `Which agents in .claude/agents can you use in this project?`
+3. To review a meeting, type `/review-transcript transcripts/<file name>`, or ask in plain words. Both use
+   the review-transcript skill in `.claude/skills/`. As Claude saves the summary, the app checks it, and
+   Claude fixes anything the app reports. The check needs the app at 0.4.0 or later.
+
+### The check on each summary
+
+The workspace's `.claude/settings.json` holds a hook that Claude Code runs after each Edit or Write. It runs
+`.claude/hooks/check-summary.sh`, which passes over any file outside `meeting-notes/`, and for a summary runs
+`chief-of-staff --hook` from the app in /Applications or ~/Applications: the same check as Meetings, on that
+one summary. What it could not read goes back to Claude, which fixes the summary. The script and the app
+only read; they write, change and delete nothing. If the app isn't installed, or is older than 0.4.0, the
+script doesn't start it and the summary is saved unchecked.
+
+Claude Code runs a workspace's hooks without asking: once you trust a folder (it asks the first time you
+start it there, and `claude -p` never asks), it runs whatever hooks the folder's `.claude/settings.json`
+holds. Read `.claude/settings.json` in any workspace someone gives you before you start Claude Code in it;
+`/hooks` lists a folder's hooks. To turn ours off, delete the hook from `.claude/settings.json`.
+
+To add the check to a workspace made before 0.4.0, copy `.claude/settings.json`, `.claude/hooks/` and
+`.claude/skills/` from a new copy of the sample, adding the hook to your `settings.json` if you already have
+one rather than replacing it, and change Kevin to your name in the skill. Your `CLAUDE.md`'s own review
+steps can stay or go: both work, but the skill is the one kept up to date.
+
+From Terminal, `"/Applications/Chief of Staff for Managers.app/Contents/MacOS/chief-of-staff" --check <folder>`
+runs the same check on a whole workspace without opening a window (`--file meeting-notes/<name>.md` for one
+summary). It prints "Nothing could not be read", or the count and one line for each, and exits 0, 1 when
+something could not be read, or 2 when the folder can't be read as a workspace.
 
 ### Prompts to try
 
 | To do this | Type this |
 |---|---|
-| Turn a transcript into a meeting summary | `Review the transcript transcripts/Riley 1-1 - 20260929.txt` |
+| Turn a transcript into a meeting summary | `/review-transcript transcripts/Riley 1-1 - 20260929.txt`, or `Review the transcript transcripts/Riley 1-1 - 20260929.txt` |
 | Prepare before you ask someone for something | `Use the negotiation-prep agent. I want to ask Praveen to run pairing sessions with Riley.` |
 | Check a plan against your own coaching points | `Use the blind-spot-check agent on this plan: <your plan or draft message>` |
 
@@ -232,7 +261,7 @@ as YYYY-MM-DD.`
 - Start a new Claude Code session after a change. Claude Code reads `CLAUDE.md` when a session starts.
 - The sample's `CLAUDE.md` opens by naming its manager, Kevin, and a fictional company, Harborline Cloud.
   Kevin's name is also in later rules of `CLAUDE.md`, in the weekly-brief section, in each agent's
-  `description:` line and in the summary template. Change these to your own name, role and company first.
+  `description:` line, in the review-transcript skill and in the summary template. Change these to your own name, role and company first.
 
 ### Your own goals
 
@@ -351,7 +380,8 @@ inside it. That rule has not been run again.
 
 ## What it reads and writes
 
-It reads `meeting-notes/*.md`, `people.md`, `CLAUDE.md`, `.claude/agents/*.md`, `library/books.json` and the
+It reads `meeting-notes/*.md`, `people.md`, `CLAUDE.md`, `.claude/agents/*.md`, `.claude/skills/*/SKILL.md`,
+`library/books.json` and the
 notes files it lists, `corrections/corrections.json`, `actions/ledger.json` and `notes/notes.json`.
 
 It writes only four files in the workspace:
@@ -363,7 +393,8 @@ It writes only four files in the workspace:
 - `library/books.json`
 - `corrections/corrections.json`
 
-It never writes a summary, `people.md`, `CLAUDE.md` or an agent. Each save goes to a temporary file that is
+It never writes a summary, `people.md`, `CLAUDE.md`, an agent or a skill, and `--check` and `--hook` write
+nothing at all. Each save goes to a temporary file that is
 then renamed over the old one, and fields the app doesn't use are kept as they were. If one of these files
 can't be read, the app says so and refuses to save it rather than overwrite it.
 

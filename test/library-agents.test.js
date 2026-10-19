@@ -103,13 +103,14 @@ describe('agents', () => {
   });
   after(async () => { await site?.stop(); });
 
-  test('one card for the coach and one per agent file, with every field', async () => {
+  test('one card for the coach, one per agent file and one per skill, with every field', async () => {
     const { cards, agentsFolderFound } = await site.api.agents();
     assert.equal(agentsFolderFound, true);
     const agentFiles = fs.readdirSync(path.join(site.root, '.claude', 'agents')).filter((f) => f.endsWith('.md'));
-    assert.equal(cards.length, 1 + agentFiles.length);
-    // The coach and five agents (step 10: the three from extras/ joined the sample).
-    assert.deepEqual(cards.map((c) => c.name), ['Coach', 'Blind spot check', 'Commitment tracker', 'Negotiation prep', 'One on one prep', 'Risk radar']);
+    const skills = fs.readdirSync(path.join(site.root, '.claude', 'skills'));
+    assert.equal(cards.length, 1 + agentFiles.length + skills.length);
+    // The coach and five agents (step 10: the three from extras/ joined the sample), then the skill (0.4.0 step 2).
+    assert.deepEqual(cards.map((c) => c.name), ['Coach', 'Blind spot check', 'Commitment tracker', 'Negotiation prep', 'One on one prep', 'Risk radar', 'Review transcript']);
     for (const c of cards) {
       assert.ok(c.purposeHtml && c.sourcesHtml && c.lastReviewed && c.rulesHtml.length, `${c.name} has every field`);
     }
