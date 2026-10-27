@@ -175,8 +175,12 @@ describe('the review-transcript skill in both workspaces', () => {
 
     test(`${name}: Purpose, Sources and Last reviewed lines, and the template and example it points to`, () => {
       for (const label of ['Purpose', 'Sources', 'Last reviewed']) assert.match(skill, new RegExp(`^${label}: \\S`, 'm'), label);
-      assert.match(skill, /^Last reviewed: 2026-10-18$/m);
+      // 0.4.1 moved it from 2026-10-18 with the lines below.
+      assert.match(skill, /^Last reviewed: 2026-10-22$/m);
       assert.ok(skill.includes('The summary format is templates/meeting-summary-template.md. example.md, next to this file, is one complete\nsummary to copy the shape of.'));
+      // 0.4.1: with no transcript named (as "Run in Claude Code" on the Agents page starts it), it lists the ones not yet
+      // reviewed and asks. Before the steps, so they and the sections moved from CLAUDE.md are as they were.
+      assert.ok(skill.includes(`summary to copy the shape of.\n\nIf ${manager} doesn't name a transcript, list the files in transcripts/ that have no summary in meeting-notes/ yet\n(a summary is named after its transcript, as under Dates), and ask which one to review.\n\n## When ${manager} asks you to review a transcript\n`));
       assert.ok(fs.existsSync(path.join(dir, 'templates', 'meeting-summary-template.md')));
       assert.ok(fs.existsSync(path.join(dir, '.claude', 'skills', 'review-transcript', 'example.md')));
       assert.deepEqual(fs.readdirSync(path.join(dir, '.claude', 'skills')), ['review-transcript']);
@@ -246,7 +250,7 @@ describe('the skill on the Agents page', () => {
     assert.equal(card.command, '/review-transcript');
     assert.equal(card.purposeHtml, 'review one meeting transcript, save its summary in meeting-notes/, and coach Kevin on the meeting.');
     assert.match(card.sourcesHtml, /^transcripts\/, goals\//);
-    assert.equal(card.lastReviewed, '2026-10-18');
+    assert.equal(card.lastReviewed, '2026-10-22');
     assert.equal(card.rulesHtml.length, 9);
     assert.equal(card.rulesHtml.at(-1), 'The app checks the summary when you save it. If it reports anything, fix it and save again.');
     assert.deepEqual(card.warnings, []);

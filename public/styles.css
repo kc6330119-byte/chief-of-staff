@@ -996,6 +996,7 @@ th[aria-sort="ascending"] .sort-icon, th[aria-sort="descending"] .sort-icon { op
 .agent-fields dt { margin-top: 12px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
 .agent-fields dt:first-child { margin-top: 0; }
 .agent-fields dd { margin: 2px 0 0; }
+.agent-run { margin: 12px 0 0; }
 .agent-card h4 { margin: 14px 0 6px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; letter-spacing: 0.02em; text-transform: uppercase; }
 /* The rules start closed behind "Rules (N)", the browser's own disclosure; each card opens on its own. */
 .agent-rules { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }

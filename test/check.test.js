@@ -158,7 +158,7 @@ describe('what the check refuses', () => {
     ['a file instead of a folder', ['--check', path.join(OCTOBER, 'people.md')]],
     ['a summary that is not there', ['--check', OCTOBER, '--file', 'meeting-notes/2026-10-13_nobody.md']],
     ['a --file outside meeting-notes/', ['--check', OCTOBER, '--file', 'people.md']],
-    ['an argument it does not know', ['--check', OCTOBER, '--quiet']],
+    ['an argument it does not know', ['--check', OCTOBER, 'extra']],
     ['no folder', ['--check']],
   ]) {
     test(`${why}: exit 2, one line on stderr, nothing on stdout`, () => {
@@ -169,6 +169,14 @@ describe('what the check refuses', () => {
       assert.ok(out.stderr.endsWith('\n'));
     });
   }
+
+  // 0.4.1: an option the app doesn't know is refused before the check, with the help.
+  test('an option it does not know: exit 2, "Unknown option" and the help on stderr, nothing on stdout', () => {
+    const out = check(['--check', OCTOBER, '--quiet']);
+    assert.equal(out.code, 2, out.stdout + out.stderr);
+    assert.equal(out.stdout, '');
+    assert.equal(out.stderr, `Unknown option: --quiet\n\n${check(['--help']).stdout}`);
+  });
 });
 
 describe('the check writes nothing anywhere', () => {

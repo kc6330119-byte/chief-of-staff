@@ -1,7 +1,9 @@
 // The Mac app: one window that shows the pages, answered by the core through the app's own URL scheme,
 // mc://localhost. It opens no network port. Every request the pages make goes to Core::handle; this file
 // only carries requests and responses. The app's name and bundle id live in tauri.conf.json only.
+mod actions;
 mod check;
+mod cli;
 mod hook;
 mod settings;
 mod workspace;
@@ -26,10 +28,10 @@ pub struct State {
 }
 
 fn main() {
-    // --hook and --check report what could not be read and exit, before anything of Tauri starts (hook.rs, check.rs).
+    // --help, --version, --hook and --check answer and exit, before anything of Tauri starts, and so does an unknown
+    // option (cli.rs).
     let args = std::env::args_os().skip(1).collect::<Vec<_>>();
-    let out = if hook::wanted(&args) { Some(hook::run_stdin(&args)) } else { check::parse(&args).map(check::run) };
-    if let Some(out) = out {
+    if let Some(out) = cli::decide(&args) {
         use std::io::Write;
         let _ = std::io::stdout().write_all(out.stdout.as_bytes()).and_then(|_| std::io::stdout().flush());
         let _ = std::io::stderr().write_all(out.stderr.as_bytes());

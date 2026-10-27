@@ -13,6 +13,7 @@ use tauri::{AppHandle, Manager, Url, WebviewUrl, WebviewWindow, WebviewWindowBui
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult};
 use tauri_plugin_opener::OpenerExt;
 
+use crate::actions::{self, Action};
 use crate::{settings, State, ORIGIN, SCHEME, WINDOW};
 
 const WELCOME: &str = "welcome";
@@ -65,49 +66,70 @@ fn welcome_link(app: &AppHandle, url: &Url) -> bool {
     if url.scheme() != SCHEME || url.host_str() != Some("localhost") { return false; }
     match url.path() {
         "/welcome.html" => true,
-        "/welcome/choose" => { choose_then_open(app, pick_folder, None); false }
-        "/welcome/new" => { choose_then_open(app, create_workspace, Some(NEW_WORKSPACE_READY)); false }
-        "/welcome/sample" => { choose_then_open(app, copy_sample, None); false }
+        "/welcome/choose" => { choose_then_open(app, pick_folder, false); false }
+        "/welcome/new" => { choose_then_open(app, create_workspace, true); false }
+        "/welcome/sample" => { choose_then_open(app, copy_sample, false); false }
         "/welcome/quit" => { app.exit(0); false }
         _ => false,
     }
 }
 
-/// Runs a folder choice off the main thread and opens what was chosen, then shows `then` if there is one.
+/// Runs a folder choice off the main thread and opens what was chosen; for a new workspace, then offers to set it up.
 /// Cancelling leaves things as they were.
-fn choose_then_open(app: &AppHandle, choose: fn(&AppHandle) -> Option<PathBuf>, then: Option<&'static str>) {
+fn choose_then_open(app: &AppHandle, choose: fn(&AppHandle) -> Option<PathBuf>, offer_setup: bool) {
     if CHOOSING.swap(true, Ordering::SeqCst) { return; }
     let app = app.clone();
     std::thread::spawn(move || {
         if let Some(folder) = choose(&app) {
-            open(&app, folder);
-            if let Some(message) = then { tell(&app, MessageDialogKind::Info, message); }
+            open(&app, folder.clone());
+            if offer_setup && wants_setup(&app) { actions::start(&app, Action::Setup, folder); }
         }
         CHOOSING.store(false, Ordering::SeqCst);
     });
 }
 
 pub fn choose_from_menu(app: AppHandle) {
-    choose_then_open(&app, pick_folder, None);
+    choose_then_open(&app, pick_folder, false);
 }
 
 pub fn new_from_menu(app: AppHandle) {
-    choose_then_open(&app, create_workspace, Some(NEW_WORKSPACE_READY));
+    choose_then_open(&app, create_workspace, true);
 }
 
 pub fn open_sample_from_menu(app: AppHandle) {
-    choose_then_open(&app, copy_sample, None);
+    choose_then_open(&app, copy_sample, false);
 }
 
-/// Shown once a new workspace is open: the coach's first-run section in its CLAUDE.md does the rest.
-const NEW_WORKSPACE_READY: &str = "Your new workspace is ready. In Terminal, open Claude Code in this folder and type: Set up my workspace";
+/// Shown once a new workspace is open, with SET_UP as its first button: the coach's first-run section in its CLAUDE.md
+/// does the rest.
+const NEW_WORKSPACE_READY: &str = "Your new workspace is ready.\n\nSet up in Claude Code opens Terminal in this folder and starts Claude Code with \"Set up my workspace\". The coach then asks you about yourself and your team.\n\nTo do it later, open Help.";
+const SET_UP: &str = "Set up in Claude Code";
+const NOT_NOW: &str = "Not Now";
+
+/// Whether "Set up in Claude Code" was clicked. The probe build prints the message and its buttons instead, and
+/// answers as MC_PROBE_SETUP says.
+fn wants_setup(app: &AppHandle) -> bool {
+    #[cfg(feature = "probe")]
+    {
+        crate::probe::log(&format!("dialog {}", serde_json::json!({ "message": NEW_WORKSPACE_READY, "buttons": [SET_UP, NOT_NOW] })));
+        let _ = app;
+        crate::probe::setup_clicked()
+    }
+    #[cfg(not(feature = "probe"))]
+    {
+        let mut dialog = app.dialog().message(NEW_WORKSPACE_READY).kind(MessageDialogKind::Info).title(&app.package_info().name)
+            .buttons(MessageDialogButtons::OkCancelCustom(SET_UP.into(), NOT_NOW.into()));
+        if let Some(w) = front(app) { dialog = dialog.parent(&w); }
+        matches!(dialog.blocking_show_with_result(), MessageDialogResult::Custom(ref label) if label == SET_UP)
+    }
+}
 
 /// The window a dialog belongs to, so it opens as a sheet on that window.
-fn front(app: &AppHandle) -> Option<WebviewWindow> {
+pub(crate) fn front(app: &AppHandle) -> Option<WebviewWindow> {
     app.get_webview_window(WINDOW).or_else(|| app.get_webview_window(WELCOME))
 }
 
-fn tell(app: &AppHandle, kind: MessageDialogKind, message: &str) {
+pub(crate) fn tell(app: &AppHandle, kind: MessageDialogKind, message: &str) {
     let mut dialog = app.dialog().message(message).kind(kind).title(&app.package_info().name);
     if let Some(w) = front(app) { dialog = dialog.parent(&w); }
     dialog.blocking_show();
@@ -207,10 +229,17 @@ fn copy_bundled(app: &AppHandle, copy: &Bundled) -> Option<PathBuf> {
         tell(app, MessageDialogKind::Error, copy.missing);
         return None;
     };
+    #[cfg(feature = "probe")]
+    let probe_target = crate::probe::saved_as(copy.source);
+    #[cfg(not(feature = "probe"))]
+    let probe_target: Option<PathBuf> = None;
     let mut panel = app.dialog().file().set_title(copy.title)
         .set_file_name(format!("{} {}", app.package_info().name, copy.name)).set_can_create_directories(true);
     if let Some(w) = front(app) { panel = panel.set_parent(&w); }
-    let target = panel.blocking_save_file()?.into_path().ok()?;
+    let target = match probe_target {
+        Some(t) => t,
+        None => panel.blocking_save_file()?.into_path().ok()?,
+    };
     if target.exists() {
         tell(app, MessageDialogKind::Warning, &format!("Nothing was copied, because this already exists:\n\n{}\n\n{} Choose a new name.", target.display(), copy.never_replaces));
         return None;
@@ -228,7 +257,7 @@ fn help_text(app: &AppHandle) -> Option<String> {
 }
 
 /// Copies a folder to a path that must not exist yet; on failure, removes only what it created.
-fn copy_new_folder(source: &Path, target: &Path) -> io::Result<()> {
+pub(crate) fn copy_new_folder(source: &Path, target: &Path) -> io::Result<()> {
     fs::create_dir(target)?; // fails if anything is already there
     let copied = copy_contents(source, target);
     if copied.is_err() { let _ = fs::remove_dir_all(target); }
@@ -259,7 +288,7 @@ fn shown(folder: &Path) -> String {
 
 /// Opens a workspace: a new core for it, remembered in the settings file, shown in the window title.
 pub fn open(app: &AppHandle, folder: PathBuf) {
-    let core = Core::new(Workspace::new(&folder), Policy::app_scheme(ORIGIN), |line| eprintln!("{line}")).with_help(help_text(app));
+    let core = Core::new(Workspace::new(&folder), Policy::app_scheme(ORIGIN), |line| eprintln!("{line}")).with_help(help_text(app)).with_actions(true);
     *app.state::<State>().core.write().unwrap() = Some(Arc::new(core));
     if let Err(e) = settings::save(app, &folder) {
         tell(app, MessageDialogKind::Warning, &format!("The workspace is open, but it could not be remembered for next time: {e}"));
@@ -297,11 +326,15 @@ fn close_welcome(app: &AppHandle) {
     if let Some(w) = app.get_webview_window(WELCOME) { let _ = w.close(); }
 }
 
-/// The window only ever shows the app's own pages. Web links open in the default browser; anything
-/// else (mailto:, file:, other schemes) does nothing.
+/// The window only ever shows the app's own pages. Web links open in the default browser, and an action: link asks for
+/// one of the actions in actions.rs; anything else (mailto:, file:, other schemes) does nothing.
 fn allow_navigation(app: &AppHandle, url: &Url) -> bool {
     match url.scheme() {
         s if s == SCHEME && url.host_str() == Some("localhost") => true,
+        "action" => {
+            actions::requested(app, url);
+            false
+        }
         "http" | "https" => {
             let _ = app.opener().open_url(url.as_str(), None::<&str>);
             #[cfg(feature = "probe")]

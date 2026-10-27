@@ -5,10 +5,13 @@ description: Review a meeting transcript and save its summary in meeting-notes/.
 
 Purpose: review one meeting transcript, save its summary in meeting-notes/, and coach the manager on the meeting.
 Sources: transcripts/, goals/, meeting-notes/, templates/meeting-summary-template.md, library/carnegie-notes.md, library/getting-more-notes.md, people.md, notes/notes.json
-Last reviewed: 2026-10-18
+Last reviewed: 2026-10-22
 
 The summary format is templates/meeting-summary-template.md. example.md, next to this file, is one complete
 summary to copy the shape of.
+
+If the manager doesn't name a transcript, list the files in transcripts/ that have no summary in meeting-notes/ yet
+(a summary is named after its transcript, as under Dates), and ask which one to review.
 
 ## When the manager asks you to review a transcript
 1. Read the transcript, the goals file, and every earlier summary in `meeting-notes/` that involves the same people.

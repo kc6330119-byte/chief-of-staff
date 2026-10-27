@@ -2407,6 +2407,18 @@ async function renderPerson(name) {
 
 // ---------- Agents, and the rules learned ----------
 
+// A card's Claude Code button (0.4.1), only in the app, which runs it: "Ask in Claude Code" on an agent's card, named
+// by its file, and "Run in Claude Code" on the review-transcript skill's. The coach has none. The app checks the action
+// again before it runs anything.
+const AGENT_FILE = /^\.claude\/agents\/([a-z0-9-]+)\.md$/;
+function claudeButton(c) {
+  if (!state.config?.actions) return '';
+  const agent = c.role === 'agent' && c.file.match(AGENT_FILE);
+  const [action, label] = agent ? [`agent:${agent[1]}`, 'Ask in Claude Code']
+    : c.role === 'skill' && c.file === '.claude/skills/review-transcript/SKILL.md' ? ['review', 'Run in Claude Code'] : [];
+  return action ? `<p class="agent-run"><a class="btn btn-small claude-action" href="action:${action}">${label}</a></p>` : '';
+}
+
 // Two sections: the agents and the coach, read-only, and "Rules learned", the corrections log, where a correction is
 // added. #/corrections, the old Corrections page, opens this page at "Rules learned". A log that can't be read is an
 // error in its own section; the agents are still shown.
@@ -2459,6 +2471,7 @@ async function renderAgents() {
                 ${field('Last reviewed', reviewed)}
                 ${c.tools ? field('Tools', esc(c.tools)) : ''}
               </dl>
+              ${claudeButton(c)}
               ${c.rulesHtml.length ? `
                 <details class="agent-rules">
                   <summary>Rules (${c.rulesHtml.length})</summary>

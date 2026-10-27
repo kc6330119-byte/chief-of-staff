@@ -1,8 +1,10 @@
 // 0.4.0, step 3: the hook as a script. Each workspace's .claude/settings.json runs
 // sh "$CLAUDE_PROJECT_DIR/.claude/hooks/check-summary.sh" after every Edit or Write. The script passes over a save
 // outside meeting-notes/ without starting the app, never starts an app older than 0.4.0 (which has no --hook and would
-// open its window), and otherwise hands the payload to the app's --hook and returns its exit code. These tests run it
-// with sh and stand-in apps in a temporary folder: the script with /Applications moved there, and HOME set to it.
+// open its window), and otherwise hands the payload to the app's --hook and returns its exit code. 0.4.1: it uses the
+// first app, in /Applications then ~/Applications, that is 0.4.0 or later, and with none it tells Claude so through
+// PostToolUse's additionalContext, with exit 0. These tests run it with sh and stand-in apps in a temporary folder: the
+// script with /Applications moved there, and HOME set to it.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -19,8 +21,12 @@ const SCRIPT = '.claude/hooks/check-summary.sh';
 const COMMAND = 'sh "$CLAUDE_PROJECT_DIR/.claude/hooks/check-summary.sh"';
 const APP = 'Chief of Staff for Managers.app';
 const SUMMARY = '2026-09-15_kevin-sam_1on1.md';
-const NOT_INSTALLED = 'Chief of Staff for Managers isn\'t installed, so this summary wasn\'t checked.\n';
-const TOO_OLD = 'This version of Chief of Staff for Managers can\'t check summaries; update to 0.4.0 or later.\n';
+const NOT_INSTALLED_LINE = 'Chief of Staff for Managers isn\'t installed, so this summary wasn\'t checked.';
+const TOO_OLD_LINE = 'This version of Chief of Staff for Managers can\'t check summaries; update to 0.4.0 or later.';
+// What Claude Code reads from a PostToolUse hook that exits 0: the line goes to Claude, next to the tool's result.
+const toClaude = (line) => `${JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: line } })}\n`;
+const NOT_INSTALLED = { code: 0, stdout: toClaude(NOT_INSTALLED_LINE), stderr: '' };
+const TOO_OLD = { code: 0, stdout: toClaude(TOO_OLD_LINE), stderr: '' };
 const PAYLOADS = fs.readFileSync(path.join(SITE_DIR, 'test', 'fixtures', 'hook', 'step1-payloads.jsonl'), 'utf8')
   .split('\n').filter(Boolean).map((l) => JSON.parse(l));
 
@@ -108,10 +114,12 @@ describe('the hook in .claude/settings.json', () => {
     assert.equal(read(STARTER, SCRIPT), script);
     assert.deepEqual(fs.readdirSync(path.join(SAMPLE, '.claude', 'hooks')), ['check-summary.sh']);
     assert.deepEqual(fs.readdirSync(path.join(STARTER, '.claude', 'hooks')), ['check-summary.sh']);
-    const code = script.split('\n').filter((l) => !l.startsWith('#')).join('\n');
+    const code = script.split('\n').filter((l) => !l.trimStart().startsWith('#')).join('\n');
     assert.doesNotMatch(code, /\b(jq|python3?|node|bash|perl|ruby|osascript|defaults|rm|mv|cp|touch|mkdir|tee|ln|chmod|open)\b/);
-    // The only redirections: messages to stderr, and PlistBuddy's own errors to /dev/null.
-    assert.deepEqual([...code.matchAll(/\d*>+[^\s)]*/g)].map((m) => m[0]).sort(), ['2>/dev/null', '>&2', '>&2']);
+    // The only redirection: PlistBuddy's own errors to /dev/null. Messages for Claude go to stdout, as JSON.
+    assert.deepEqual([...code.matchAll(/\d*>+[^\s)]*/g)].map((m) => m[0]).sort(), ['2>/dev/null']);
+    // sed only escapes the line, reading from the pipe: no -i, no w.
+    assert.deepEqual(code.match(/\bsed\b.*/g), ['sed \'s/[\\\\"]/\\\\&/g\')']);
     assert.equal((code.match(/\$\(cat\)/g) || []).length, 1, 'stdin is read once');
     const syntax = spawnSync('/bin/sh', ['-n', path.join(SAMPLE, SCRIPT)], { encoding: 'utf8' });
     assert.equal(syntax.status, 0, syntax.stderr);
@@ -139,23 +147,36 @@ describe('check-summary.sh', () => {
     assert.deepEqual(started(p), []);
   });
 
-  test('no app in /Applications or ~/Applications: exit 0 and one line', () => {
+  test('no app in /Applications or ~/Applications: exit 0, and the line for Claude as PostToolUse JSON on stdout', () => {
     const p = place();
-    for (const tool of ['Write', 'Edit']) assert.deepEqual(hook(p, summaryPayload(tool)), { code: 0, stdout: '', stderr: NOT_INSTALLED }, tool);
+    for (const tool of ['Write', 'Edit']) assert.deepEqual(hook(p, summaryPayload(tool)), NOT_INSTALLED, tool);
+    assert.deepEqual(JSON.parse(hook(p, summaryPayload()).stdout), { hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: NOT_INSTALLED_LINE } });
   });
 
-  test('an app reporting 0.3.3: exit 0 and one line, and the app is not started', () => {
+  test('an app reporting 0.3.3: exit 0 and the line for Claude, and the app is not started', () => {
     const p = place();
     fakeApp(p.system, '0.3.3', { log: p.log });
-    assert.deepEqual(hook(p, summaryPayload()), { code: 0, stdout: '', stderr: TOO_OLD });
+    assert.deepEqual(hook(p, summaryPayload()), TOO_OLD);
     assert.deepEqual(started(p), []);
+  });
+
+  test('the line is escaped for JSON: a double quote and a backslash in it come through as they are', () => {
+    const p = place();
+    const line = 'A "quoted" word, a back\\slash, \\" and \'its\' $HOME `x`.';
+    const text = fs.readFileSync(p.copy, 'utf8');
+    assert.equal(text.split(`tell "${NOT_INSTALLED_LINE}"`).length, 2);
+    // The line as the script would write it in double quotes: \, ", $ and ` escaped for sh.
+    fs.writeFileSync(p.copy, text.replace(`tell "${NOT_INSTALLED_LINE}"`, `tell "${line.replace(/[\\"$`]/g, '\\$&')}"`));
+    const out = hook(p, summaryPayload());
+    assert.deepEqual(out, { code: 0, stdout: toClaude(line), stderr: '' });
+    assert.equal(JSON.parse(out.stdout).hookSpecificOutput.additionalContext, line);
   });
 
   test('an older app, or one whose version can\'t be read, is never started', () => {
     for (const version of ['0.2.0', '0.3.9', '0.0.1', '0', '', 'abc', '0.4.0-beta', '.4.0', undefined, null]) {
       const p = place();
       fakeApp(path.join(p.home, 'Applications'), version, { log: p.log });
-      assert.deepEqual(hook(p, summaryPayload()), { code: 0, stdout: '', stderr: TOO_OLD }, String(version));
+      assert.deepEqual(hook(p, summaryPayload()), TOO_OLD, String(version));
       assert.deepEqual(started(p), [], String(version));
     }
   });
@@ -179,7 +200,7 @@ describe('check-summary.sh', () => {
     }
   });
 
-  test('the app is found as before: /Applications first, else ~/Applications', () => {
+  test('the first app that is 0.4.0 or later is used: /Applications, else ~/Applications', () => {
     const both = place();
     fakeApp(both.system, '0.4.0', { log: both.log });
     fakeApp(path.join(both.home, 'Applications'), '0.4.1', { log: both.log });
@@ -190,13 +211,32 @@ describe('check-summary.sh', () => {
     fakeApp(path.join(homeOnly.home, 'Applications'), '0.4.1', { log: homeOnly.log });
     hook(homeOnly, summaryPayload());
     assert.deepEqual(started(homeOnly), ['0.4.1 --hook']);
+  });
 
-    // An old app in /Applications is the one found, and is not started.
-    const old = place();
-    fakeApp(old.system, '0.3.3', { log: old.log });
-    fakeApp(path.join(old.home, 'Applications'), '0.4.0', { log: old.log });
-    assert.equal(hook(old, summaryPayload()).stderr, TOO_OLD);
-    assert.deepEqual(started(old), []);
+  test('an old app in /Applications never hides a new one in ~/Applications: the new one runs', () => {
+    for (const old of ['0.3.3', '0.2.0', 'abc', undefined, null]) {
+      const p = place();
+      fakeApp(p.system, old, { log: p.log });
+      fakeApp(path.join(p.home, 'Applications'), '0.4.1', { log: p.log, code: 2 });
+      const input = summaryPayload();
+      assert.deepEqual(hook(p, input), { code: 2, stdout: '', stderr: `0.4.1 --hook: ${input}\n` }, String(old));
+      assert.deepEqual(started(p), ['0.4.1 --hook'], String(old));
+    }
+  });
+
+  test('both old: exit 0, the line for Claude that says to update, and neither is started', () => {
+    const p = place();
+    fakeApp(p.system, '0.3.3', { log: p.log });
+    fakeApp(path.join(p.home, 'Applications'), '0.3.9', { log: p.log });
+    assert.deepEqual(hook(p, summaryPayload()), TOO_OLD);
+    assert.deepEqual(started(p), []);
+  });
+
+  test('neither: exit 0 and the line for Claude that says it isn\'t installed; an app folder with no program is not one', () => {
+    const p = place();
+    fs.mkdirSync(path.join(p.system, APP, 'Contents', 'MacOS'), { recursive: true });
+    fs.mkdirSync(path.join(p.home, 'Applications', APP), { recursive: true });
+    assert.deepEqual(hook(p, summaryPayload()), NOT_INSTALLED);
   });
 
   test('with the real app (0.4.0): a summary with a malformed ID comes back to Claude with exit 2', () => {

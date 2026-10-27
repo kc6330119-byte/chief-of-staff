@@ -25,8 +25,9 @@ const promptWindows = () => (sh('pgrep', ['-x', 'CoreServicesUIAgent']).stdout.t
 
 /// Runs `exe` with `args`, looking for a window of its own and for a new Gatekeeper prompt every 20 ms until it
 /// exits. A run still going after `limit` ms is stopped: a prompt waits for an answer, so the run would never end.
-async function watched(exe, args, limit = 20000) {
-  const child = spawn(exe, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+/// `env`, when given, is the run's whole environment.
+async function watched(exe, args, limit = 20000, env = undefined) {
+  const child = spawn(exe, args, { stdio: ['ignore', 'pipe', 'pipe'], env });
   let stdout = '';
   let stderr = '';
   child.stdout.on('data', (d) => { stdout += d; });
@@ -116,8 +117,8 @@ try {
   const minOs = read('LSMinimumSystemVersion');
   check(`the minimum macOS version is ${CONF.bundle.macOS.minimumSystemVersion}`, minOs === CONF.bundle.macOS.minimumSystemVersion, minOs);
   const version = read('CFBundleShortVersionString');
-  check(`Info.plist's version is 0.4.0 (CFBundleShortVersionString), as in tauri.conf.json and package.json`,
-    version === '0.4.0' && CONF.version === '0.4.0' && PKG.version === '0.4.0', `${version}; tauri.conf.json ${CONF.version}; package.json ${PKG.version}`);
+  check(`Info.plist's version is 0.4.1 (CFBundleShortVersionString), as in tauri.conf.json and package.json`,
+    version === '0.4.1' && CONF.version === '0.4.1' && PKG.version === '0.4.1', `${version}; tauri.conf.json ${CONF.version}; package.json ${PKG.version}`);
 
   // 7. The sample inside: the three book-notes files are placeholders, there is no board.json or notes file, and its
   //    ledger is the repository's (0.3.0).
@@ -238,6 +239,68 @@ try {
       isQuarantined ? `${run.ms} ms, ${run.samples} samples, ${run.windows} with a window, ${run.prompts} with a prompt${run.timedOut ? ', stopped after 20 s' : ''}${unchanged ? '' : ', the sample changed'}` : 'not run');
   } finally {
     fs.rmSync(quarantined, { recursive: true, force: true });
+  }
+
+  // 14. Apple events (0.4.1): the app starts Claude Code in Terminal through osascript, so its Info.plist says why, and
+  //     its signature carries the entitlement that lets the hardened runtime send them.
+  const appleEvents = read('NSAppleEventsUsageDescription');
+  check('Info.plist has NSAppleEventsUsageDescription: "Chief of Staff for Managers opens Terminal in your workspace and starts Claude Code there."',
+    appleEvents === 'Chief of Staff for Managers opens Terminal in your workspace and starts Claude Code there.', appleEvents);
+  const ent = sh('codesign', ['-d', '--entitlements', '-', '--xml', app]);
+  check('codesign shows the com.apple.security.automation.apple-events entitlement, set to true',
+    ent.status === 0 && /<key>com\.apple\.security\.automation\.apple-events<\/key>\s*<true\/>/.test(ent.stdout), ent.status ? both(ent).trim() : '');
+
+  // 15. The command line (0.4.1) on the release app: --help and --version print and exit 0, --bogus prints the help on
+  //     stderr and exits 2. Each ends by itself with no window and no Gatekeeper prompt, and writes nothing in an
+  //     empty home folder.
+  const VERSION_LINE = `${CONF.productName} 0.4.1\n`;
+  const cliHome = path.join(REPO, 'target', 'dist', 'check-cli-home');
+  const cli = async (args) => {
+    fs.rmSync(cliHome, { recursive: true, force: true });
+    fs.mkdirSync(cliHome, { recursive: true });
+    const r = await watched(exe, args, 20000, { PATH: '/usr/bin:/bin', HOME: cliHome });
+    r.homeWritten = fs.readdirSync(cliHome).length > 0;
+    return r;
+  };
+  const quiet = (r) => r.windows === 0 && r.prompts === 0 && !r.timedOut && !r.homeWritten;
+  const about = (r) => `exit ${r.code}, stdout ${JSON.stringify(r.stdout.slice(0, 80))}, stderr ${JSON.stringify(r.stderr.slice(0, 80))}, ${r.ms} ms, ${r.samples} samples, ${r.windows} with a window, ${r.prompts} with a prompt${r.timedOut ? ', stopped after 20 s' : ''}${r.homeWritten ? ', wrote to its home folder' : ''}`;
+  try {
+    const help = await cli(['--help']);
+    check('the release app with --help exits 0 and prints the help, opening no window',
+      help.code === 0 && help.stdout.startsWith(VERSION_LINE) && ['--check', '--file', '--json', '--hook', '--help, -h', '--version'].every((o) => help.stdout.includes(`\n  ${o}`))
+      && help.stderr === '' && quiet(help), about(help));
+    const version = await cli(['--version']);
+    check(`the release app with --version exits 0 and prints "${VERSION_LINE.trim()}", opening no window`,
+      version.code === 0 && version.stdout === VERSION_LINE && version.stderr === '' && quiet(version), about(version));
+    const bogus = await cli(['--bogus']);
+    check('the release app with --bogus exits 2 and prints "Unknown option: --bogus" and the help, opening no window',
+      bogus.code === 2 && bogus.stdout === '' && bogus.stderr === `Unknown option: --bogus\n\n${help.stdout}` && quiet(bogus), about(bogus));
+  } finally {
+    fs.rmSync(cliHome, { recursive: true, force: true });
+  }
+
+  // 16. The bundled sample's and starter's check-summary.sh is 0.4.1's: it looks in /Applications and ~/Applications for
+  //     the first app that is 0.4.0 or later, and with none tells Claude through PostToolUse's additionalContext, exit 0.
+  //     A copy of each, with /Applications pointed at an empty folder and HOME at another, is run on a summary's save.
+  const hookDir = path.join(REPO, 'target', 'dist', 'check-hook');
+  try {
+    for (const [name, shipped] of [['sample', sample], ['starter', starter]]) {
+      check(`the ${name}'s check-summary.sh is the new one: the first 0.4.0 or later app in /Applications or ~/Applications, and with none a line for Claude on stdout, exit 0`, () => {
+        const text = fs.readFileSync(path.join(shipped, '.claude', 'hooks', 'check-summary.sh'), 'utf8');
+        const loop = text.includes('for app in "/Applications/Chief of Staff for Managers.app" "$HOME/Applications/Chief of Staff for Managers.app"; do');
+        const json = text.includes('{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"%s"}}') && !text.includes('>&2');
+        fs.rmSync(hookDir, { recursive: true, force: true });
+        for (const d of ['system', 'home']) fs.mkdirSync(path.join(hookDir, d), { recursive: true });
+        const copy = path.join(hookDir, 'check-summary.sh');
+        fs.writeFileSync(copy, text.replace('"/Applications/Chief of Staff for Managers.app"', JSON.stringify(path.join(hookDir, 'system', `${CONF.productName}.app`))));
+        const payload = JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: 'Write', tool_input: { file_path: '/ws/meeting-notes/x.md' } });
+        const r = spawnSync('/bin/sh', [copy], { input: payload, env: { PATH: '/usr/bin:/bin', HOME: path.join(hookDir, 'home') }, encoding: 'utf8', timeout: 20000 });
+        const told = r.status === 0 && r.stderr === '' && r.stdout === `${JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: 'Chief of Staff for Managers isn\'t installed, so this summary wasn\'t checked.' } })}\n`;
+        return [loop && json && told, [loop ? '' : 'no loop over both folders', json ? '' : 'no PostToolUse JSON', told ? '' : `with no app: exit ${r.status}, stdout ${JSON.stringify(r.stdout)}, stderr ${JSON.stringify(r.stderr)}`].filter(Boolean).join('; ')];
+      });
+    }
+  } finally {
+    fs.rmSync(hookDir, { recursive: true, force: true });
   }
 
 } finally {

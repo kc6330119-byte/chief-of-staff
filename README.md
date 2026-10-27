@@ -10,11 +10,11 @@ A Rust core reads and writes the files and answers every request. The interface 
 JavaScript inside a native macOS window (the system's own WebKit, through Tauri). There is no server, no
 browser and no network port.
 
-Version 0.4.0, built from Mission Control Native 0.1.1.
+Version 0.4.1, built from Mission Control Native 0.1.1.
 
 ## Download
 
-Download `Chief-of-Staff-for-Managers-0.4.0-universal.dmg` from [the latest release][latest]. It runs on
+Download `Chief-of-Staff-for-Managers-0.4.1-universal.dmg` from [the latest release][latest]. It runs on
 macOS 13 or later, on Apple silicon and Intel Macs.
 
 1. Open the `.dmg`. A window shows the app and a shortcut to Applications.
@@ -55,9 +55,16 @@ a workspace before it opens it.
    `people.md` with one row for you, and nothing from the sample.
 2. In Terminal, go to the new folder, start `claude` and type `Set up my workspace`. The coach asks for your
    name, role, company and the people you meet with, then writes `people.md` and puts your name and company
-   in the coach, the agents, the skill and the template.
+   in the coach, the agents, the skill and the template. In one line, with the new folder's path:
+
+   ```sh
+   cd "<folder>" && claude "Set up my workspace"
+   ```
 
 Then start a new Claude Code session in the folder.
+
+The app can start step 2 for you: click **Set up in Claude Code** once the new workspace is open, or the link
+in the app's Help.
 
 ## The pages
 

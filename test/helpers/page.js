@@ -42,8 +42,9 @@ function element(id) {
   };
 }
 
-// Opens `hash` (e.g. "#/meetings") and resolves once the page has drawn.
-export async function openPage(site, hash) {
+// Opens `hash` (e.g. "#/meetings") and resolves once the page has drawn. `config` is what /api/config would have said;
+// { actions: true } draws the page as the app does, with its Claude Code buttons.
+export async function openPage(site, hash, { config = { demo: true } } = {}) {
   const elements = new Map();
   const byId = (id) => {
     if (!elements.has(id)) elements.set(id, element(id));
@@ -76,7 +77,7 @@ export async function openPage(site, hash) {
   context.scrollTo = () => {};
   // The script ends by calling start(), which routes without waiting; route() is awaited here instead.
   vm.runInContext(SCRIPT.replace(/\nstart\(\);\s*$/, '\n'), context, { filename: 'app.js' });
-  await vm.runInContext('state.config = { demo: true }; route()', context);
+  await vm.runInContext(`state.config = ${JSON.stringify(config)}; route()`, context);
 
   const page = {
     el: byId,

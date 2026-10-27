@@ -68,7 +68,8 @@ The window title shows which folder is open.
   person's page.
 - **Agents**: the coach (`CLAUDE.md`), each agent in `.claude/agents/` and each skill in `.claude/skills/`,
   one card each. A skill's card says "Skill" and the command that runs it, such as `/review-transcript`.
-  The page only shows them. Below the cards, "Rules learned" is your log of corrections.
+  The page only shows them, and **Ask in Claude Code** on an agent's card, or **Run in Claude Code** on the
+  skill's, starts it in Terminal. Below the cards, "Rules learned" is your log of corrections.
 - **Library**: your books, your ratings and your own notes on them.
 
 ### Review the sample transcript
@@ -91,7 +92,7 @@ Because the sample counts to its newest meeting, Today now counts to this one.
 
 1. Choose **File > New Workspace…**, or click **New Workspace…** on the welcome window.
 2. Choose where to save it and give it a name.
-3. The app opens the new workspace and says what to do next.
+3. The app opens the new workspace and offers **Set up in Claude Code**, which starts the setup below.
 
 A new workspace never replaces a file or folder that is already there. If the name is taken, nothing is
 made, and you choose a new name.
@@ -104,7 +105,9 @@ summary template in `templates/`, book notes in `library/` and a `people.md` wit
 
 ### Set it up with Claude Code
 
-In Terminal, go to the new folder and start Claude Code with `claude`. Then type: `Set up my workspace`
+[Set up my workspace in Claude Code](action:setup): Terminal opens in your workspace and Claude Code starts
+with `Set up my workspace`. Or in Terminal, go to the new folder and start Claude Code with `claude`. Then
+type: `Set up my workspace`
 
 The coach asks one question at a time:
 
@@ -157,6 +160,9 @@ Claude Code:
    in plain words: `Review the transcript transcripts/<its file name>`. Both use the review-transcript
    skill in `.claude/skills/`.
 3. In the app, click **Meetings**, or choose **View > Reload** (⌘R) if it is already showing.
+
+Or [review a meeting in Claude Code](action:review): Terminal opens in your workspace and Claude Code starts
+with `/review-transcript`. It lists the transcripts that have no summary yet and asks which one.
 
 As Claude Code saves the summary, the app checks it, as Meetings would. If it could not read something,
 such as an ID not in the form A-YYMMDD-n, it tells Claude, and Claude fixes the summary and saves it again.
@@ -299,6 +305,29 @@ ID dated on or after your oldest summary that matches no action item is still a 
 
 An ID used by more than one action item usually means two meetings on the same day without a letter, such
 as A-261005-1 in both; the second meeting's IDs should be A-261005b-1 and on.
+
+### What happens when I click a Claude Code link?
+
+A Claude Code link, such as "Set up my workspace in Claude Code" above, or a button on the Agents page,
+opens a new Terminal window in your workspace folder and runs one command there:
+
+- Set up: `claude "Set up my workspace"`
+- Review a meeting, or **Run in Claude Code** on the skill's card: `claude "/review-transcript"`
+- **Ask in Claude Code** on an agent's card: `claude "Use the <name> agent"`, for an agent whose file is
+  in `.claude/agents/`
+
+Set up runs only in a new workspace: once it's set up, the app says "This workspace is already set up".
+
+The first time, macOS asks whether Chief of Staff for Managers may control Terminal. Click **OK** (or
+**Allow**). To change your answer later, see System Settings > Privacy & Security > Automation. If you don't allow it,
+or Terminal can't be started that way, the app opens Terminal in your workspace and copies the command
+instead: paste it and press Return.
+
+If Claude Code isn't installed, the app says so and offers to open its install page in your browser. It
+never installs anything.
+
+These are the only commands the app runs. A link in a summary, a note or any other file in your workspace
+never starts anything: it shows as plain text.
 
 ### What does "Suggested" mean?
 

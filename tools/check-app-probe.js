@@ -1,7 +1,8 @@
 // Run inside the app window by tools/check-app.mjs (app built with --features probe). It uses the pages the
 // way a person would: clicks, form fields, the switch, a reload. It reports by requesting /__probe/<what>,
 // which the app prints. MODE is replaced by the check script: "session", "restart", "welcome", "missing",
-// "missing-files", "unreadable-files", "file-menu", "briefing" (the sample as shipped, for Today's values) or "starter".
+// "missing-files", "unreadable-files", "file-menu", "briefing" (the sample as shipped, for Today's values), "starter" or
+// "new-workspace" (New Workspace… on the welcome window, then "Set up in Claude Code").
 // PRIVATE_TEXTS is replaced with the starts of the Manager-only notes and the note between meetings in the briefing
 // workspace, none of which may show on Today.
 // ODD_NAME is replaced with the file name of a summary that has spaces, an apostrophe, an ampersand and an
@@ -269,7 +270,7 @@
         appCalls: await appCalls(),
       });
       await shot(MODE === 'missing' ? 'welcome-missing-folder' : 'welcome');
-      const button = document.querySelector(MODE === 'missing' ? 'a[href="/welcome/quit"]' : 'a[href="/welcome/choose"]');
+      const button = document.querySelector(MODE === 'missing' ? 'a[href="/welcome/quit"]' : MODE === 'new-workspace' ? 'a[href="/welcome/new"]' : 'a[href="/welcome/choose"]');
       await report('welcome-click', button.textContent.trim());
       button.click();
       return;
@@ -320,6 +321,14 @@
     }
     if (MODE === 'welcome') {
       await report('main-after-welcome', { url: location.href, appCalls: await appCalls() });
+      await report('done');
+      return;
+    }
+    // The new workspace is open; the app offers "Set up in Claude Code", which the probe build "clicks", and prints the
+    // steps it would take. Time for that, then the end.
+    if (MODE === 'new-workspace') {
+      await sleep(2000);
+      await report('new-workspace-open', { url: location.href, title: document.title });
       await report('done');
       return;
     }
@@ -521,11 +530,48 @@
         sections: [...app.querySelectorAll('#help-article h2')].map((h) => h.textContent.trim()),
         marks: app.querySelectorAll('.cnr, .notice').length,
         error: app.querySelector('.notice-error')?.textContent.trim() || null,
-        linksOut: [...app.querySelectorAll('#help-article a')].map((a) => a.getAttribute('href')).filter((h) => !h.startsWith('#')),
+        // A Claude Code link (action:) goes to the app, not out of it; those are checked below.
+        linksOut: [...app.querySelectorAll('#help-article a')].map((a) => a.getAttribute('href')).filter((h) => !h.startsWith('#') && !h.startsWith('action:')),
         wide: document.documentElement.scrollWidth > window.innerWidth + 1,
       });
       await shot('help');
       await report('menu');
+
+      // ---- Claude Code links and buttons (0.4.1): a click goes to the app, which in this build prints the steps it
+      // would take and takes none; the page stays where it is. An address that isn't one of the app's actions is refused.
+      // One at a time, as the app runs them. ----
+      const actionClick = async (el) => {
+        const at = location.href;
+        el.click();
+        await sleep(800);
+        return location.href === at && !app.querySelector('.loading');
+      };
+      const helpLinks = [...app.querySelectorAll('#help-article a.action-link')];
+      const helpActions = helpLinks.map((a) => ({ text: a.textContent.trim(), href: a.getAttribute('href') }));
+      const helpStayed = [];
+      for (const a of helpLinks) helpStayed.push(await actionClick(a));
+      await go('#/agents');
+      const actionCards = [...app.querySelectorAll('.agent-card')].map((card) => ({
+        file: card.querySelector('.agent-file code')?.textContent.trim() || null,
+        buttons: [...card.querySelectorAll('a.claude-action')].map((b) => ({ text: b.textContent.trim(), href: b.getAttribute('href') })),
+      }));
+      const buttonsClicked = [];
+      const buttonsStayed = [];
+      for (const b of [app.querySelector('a.claude-action[href="action:review"]'), app.querySelector('a.claude-action[href="action:agent:risk-radar"]')]) {
+        if (!b) continue;
+        buttonsClicked.push(b.getAttribute('href'));
+        buttonsStayed.push(await actionClick(b));
+      }
+      await shot('agents-claude-buttons');
+      const refused = ['action:agent:../agents/risk-radar', 'action:agent:no-such-agent', 'action:rm', 'action:setup?x=1'];
+      const refusedStayed = [];
+      for (const href of refused) {
+        const a = Object.assign(document.createElement('a'), { href, textContent: 'x' });
+        app.append(a);
+        refusedStayed.push(await actionClick(a));
+        a.remove();
+      }
+      await report('actions', { helpActions, helpStayed, cards: actionCards, buttonsClicked, buttonsStayed, refused, refusedStayed });
 
       // ---- a summary whose name has spaces, an apostrophe, an ampersand and an accented letter: opened by
       // clicking its link on the Meetings page, as a person would ----

@@ -245,6 +245,9 @@ pub struct Core {
     log: Box<dyn Fn(&str) + Send + Sync>,
     /// The Help page's Markdown (help.md), handed over by the caller; None if it couldn't be read.
     help: Option<String>,
+    /// Whether the caller runs the app's actions (0.4.1): the app does, the test server doesn't. Help then draws its
+    /// action: links as links, and the Agents page its Claude Code buttons.
+    actions: bool,
 }
 
 static CARD_ROUTE: LazyLock<regex::Regex> = LazyLock::new(|| js::re(r"^\/api\/board\/cards\/([\w-]+)$", ""));
@@ -314,13 +317,19 @@ fn match_route(method: &str, path: &str) -> Result<Route, bool> {
 
 impl Core {
     pub fn new(ws: Workspace, policy: Policy, log: impl Fn(&str) + Send + Sync + 'static) -> Self {
-        Core { ws, policy, lock: Mutex::new(()), seen_warnings: Mutex::new(HashSet::new()), log: Box::new(log), help: None }
+        Core { ws, policy, lock: Mutex::new(()), seen_warnings: Mutex::new(HashSet::new()), log: Box::new(log), help: None, actions: false }
     }
 
     /// The Help page's text. help.md is not part of the workspace: the app ships it as a resource and the test server
     /// reads the repository's copy, so each caller reads it and hands it over here.
     pub fn with_help(mut self, markdown: Option<String>) -> Self {
         self.help = markdown;
+        self
+    }
+
+    /// The caller runs the app's actions: see `actions`.
+    pub fn with_actions(mut self, actions: bool) -> Self {
+        self.actions = actions;
         self
     }
 
@@ -423,7 +432,10 @@ impl Core {
         // "Show private notes": Manager-only notes in a summary, and the text of my notes between meetings.
         let private = param("private").as_deref() == Some("1");
         Ok(match route {
-            Route::Config => json!({ "demo": self.demo(), "dataRoot": ws.root().file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default() }),
+            Route::Config => json!({
+                "demo": self.demo(), "dataRoot": ws.root().file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                "actions": self.actions,
+            }),
             // ?week=this|last picks the briefing's week.
             Route::Today => today::today_view(ws, self.demo(), briefing::Week::parse(param("week").as_deref())?)?,
             Route::TodayAct(id, action) => today::act(ws, self.demo(), &id, &action, body, briefing::Week::parse(param("week").as_deref())?)?,
@@ -471,7 +483,7 @@ impl Core {
             Route::DeleteNote(id) => notes::delete(ws, &id)?,
             // Drawn like a meeting summary. help.md has no "Manager-only note" item, so nothing is held back.
             Route::Help => match &self.help {
-                Some(text) => json!({ "html": markdown::render_markdown(text, false).html }),
+                Some(text) => json!({ "html": markdown::render_help(text, self.actions) }),
                 None => return Err(Error::Status(404, "The Help page is missing from the app.".into())),
             },
         })
@@ -593,5 +605,13 @@ mod tests {
         assert_eq!(rendered.private_notes, 0);
         // No links out: the app has no browser for them.
         assert!(!rendered.html.contains("href=\"http"), "{}", rendered.html);
+        // Its action: links are links only where the caller runs actions.
+        let help = include_str!("../../help.md");
+        let links = help.matches("](action:").count();
+        assert!(links >= 2);
+        assert_eq!(markdown::render_help(help, true).matches("<a class=\"action-link\" href=\"action:").count(), links);
+        let plain = markdown::render_help(help, false);
+        assert!(!plain.contains("action:"), "{plain}");
+        assert_eq!(plain, rendered.html);
     }
 }

@@ -40,6 +40,13 @@
 //     and the People row the count, never the text; at 1440 and 1100 px nothing in the notes sections overflows; after
 //     a restart the notes are there with the switch off
 //
+//   - Claude Code actions (0.4.1): Help's two action links and the Agents page's buttons (one per agent, one on the skill,
+//     none on the coach) are drawn, and a click on each goes to the app, which would open Terminal in the workspace with
+//     its command (the setup only says "already set up" in the sample, which has no "Setting up this workspace");
+//     addresses not in the app's list are refused; New Workspace… offers "Set up in Claude Code", which would run the
+//     setup in the new folder; the normal build's Info.plist and entitlement for Apple events. The probe
+//     build's actions only record what they would do: nothing here runs osascript, opens Terminal or uses the clipboard
+//
 //   node tools/check-app.mjs            build both, then check
 //   node tools/check-app.mjs --no-build check the bundles already built
 //
@@ -180,6 +187,14 @@ async function run(profile, label, env, { timeout = 180000, untilWindow = false 
       }, 1500);
     }
     // What the core received for each meeting, exactly as the window sent it.
+    // What an action would do (0.4.1), as the probe build's recording runner prints it; an address it refused; and the
+    // message after New Workspace…, which the probe build prints instead of showing.
+    const action = line.match(/^\[probe\] action (\{.*\})$/);
+    if (action) events.push({ run: label, what: 'action', data: JSON.parse(action[1]) });
+    const refused = line.match(/^\[probe\] action refused (".*")$/);
+    if (refused) events.push({ run: label, what: 'action-refused', data: JSON.parse(refused[1]) });
+    const dialog = line.match(/^\[probe\] dialog (\{.*\})$/);
+    if (dialog) events.push({ run: label, what: 'dialog', data: JSON.parse(dialog[1]) });
     const asked = line.match(/^\[probe\] GET (\/api\/meeting\?\S*) -> (\d+)/);
     if (asked) meetingRequests.push({ run: label, target: asked[1], status: Number(asked[2]) });
     const m = line.match(/^\[probe\] GET \/__probe\/([\w-]+)\?(\S*) -> /);
@@ -287,8 +302,15 @@ const starterChanged = changed(starterBefore, hashTree(wsStarter));
 // The File menu, opened over the Help page, for its screenshot.
 await run('debug', 'file-menu', { MC_PROBE_WORKSPACE: WS, MC_PROBE: probeScript('file-menu') }, { timeout: 60000 });
 
+// New Workspace… on the welcome window (0.4.1): the starter is copied to WS-new in place of the Save panel, and "Set up
+// in Claude Code" is "clicked". The probe build's recording runner prints what it would run; nothing is run.
+const wsNew = `${WS}-new`;
+fs.rmSync(SETTINGS, { force: true });
+await run('debug', 'new-workspace', { MC_PROBE: probeScript('new-workspace'), MC_PROBE_NEW: wsNew, MC_PROBE_SETUP: '1' }, { timeout: 60000 });
+const newWorkspaceChanged = fs.existsSync(wsNew) ? changed(hashTree(path.join(REPO, 'starter-workspace')), hashTree(wsNew)) : null;
+
 // The normal build's welcome window, for the screenshot.
-fs.rmSync(SETTINGS);
+fs.rmSync(SETTINGS, { force: true });
 await run('release', 'release-welcome', {}, { untilWindow: true });
 fs.writeFileSync(SETTINGS, settingsText);
 
@@ -352,6 +374,19 @@ const SAMPLE_TILES = {
   'team-alerts': ['Team alerts', '0', 'No one flagged'],
 };
 const SAMPLE_OVERDUE = ['A-260505-2', 'A-260505-3', 'A-260505-4', 'A-260915-4'];
+// Actions (0.4.1): what the recording runner printed for each click, and what each should have been: osascript, with the
+// workspace folder and the command as its two arguments, and nothing else.
+const actionsSeen = one('actions');
+const sameFolder = (a, b) => { try { return fs.realpathSync(a) === fs.realpathSync(b); } catch { return a === b; } };
+const ranInTerminal = (plan, action, folder, command) => plan?.action === action && sameFolder(plan.folder, folder) && plan.steps.length === 1
+  && plan.steps[0].osascript?.script.startsWith('on run argv\n') && plan.steps[0].osascript.script.includes('quoted form of folderPath')
+  && plan.steps[0].osascript.args.length === 2 && sameFolder(plan.steps[0].osascript.args[0], folder) && plan.steps[0].osascript.args[1] === command;
+const plans = (run) => ev('action', run);
+const AGENT_STEMS = fs.readdirSync(path.join(WS, '.claude', 'agents')).filter((f) => /^[a-z0-9-]+\.md$/.test(f)).sort().map((f) => f.slice(0, -3));
+// The Info.plist and the signature of the normal build.
+const releasePlist = path.join(appPath('release'), 'Contents', 'Info.plist');
+const appleEventsText = sh('/usr/libexec/PlistBuddy', ['-c', 'Print :NSAppleEventsUsageDescription', releasePlist]).stdout.trim();
+const entitlements = sh('codesign', ['-d', '--entitlements', '-', '--xml', appPath('release')]).stdout;
 
 const checklist = {
   'no listening port for the app\'s process (lsof)': verdict(lsofClean && Object.keys(lsofs).length >= 3),
@@ -380,6 +415,31 @@ const checklist = {
   'the Help link in the sidebar foot opens the Help page: its five sections, nothing marked "could not read", no link out': verdict(
     help?.link === 'Help' && help.hash === '#/help' && help.page === 'help' && help.current === 'page'
     && help.sections.join() === HELP_SECTIONS.join() && help.marks === 0 && !help.error && help.linksOut.length === 0 && !help.wide),
+  'Help: "Set up my workspace in Claude Code" and "review a meeting in Claude Code" are links to action:setup and action:review; each click goes to the app, which in the sample (its CLAUDE.md has no "Setting up this workspace") says "This workspace is already set up" and runs nothing, and would run claude "/review-transcript" in Terminal in the workspace, and the page stays': verdict(
+    actionsSeen?.helpActions.map((a) => `${a.text}=${a.href}`).join('|') === 'Set up my workspace in Claude Code=action:setup|review a meeting in Claude Code=action:review'
+    && actionsSeen.helpStayed.length === 2 && actionsSeen.helpStayed.every(Boolean)
+    && !fs.readFileSync(path.join(WS, 'CLAUDE.md'), 'utf8').includes('## Setting up this workspace')
+    && plans('session')[0]?.action === 'setup' && sameFolder(plans('session')[0].folder, WS) && plans('session')[0].steps.length === 1
+    && /^This workspace is already set up\n/.test(plans('session')[0].steps[0].tell || '')
+    && ranInTerminal(plans('session')[1], 'review', WS, 'claude "/review-transcript"')),
+  [`Agents: "Ask in Claude Code" on each of the ${AGENT_STEMS.length} agents' cards, "Run in Claude Code" on the skill's, none on the coach's; the skill's runs claude "/review-transcript" and risk-radar's claude "Use the risk-radar agent", and the page stays`]: verdict(
+    actionsSeen?.cards.length === AGENT_STEMS.length + 2 && actionsSeen.cards[0].file === 'CLAUDE.md' && actionsSeen.cards[0].buttons.length === 0
+    && AGENT_STEMS.every((n) => actionsSeen.cards.some((c) => c.file === `.claude/agents/${n}.md` && c.buttons.length === 1
+      && c.buttons[0].text === 'Ask in Claude Code' && c.buttons[0].href === `action:agent:${n}`))
+    && actionsSeen.cards.some((c) => c.file === '.claude/skills/review-transcript/SKILL.md' && c.buttons.length === 1
+      && c.buttons[0].text === 'Run in Claude Code' && c.buttons[0].href === 'action:review')
+    && actionsSeen.buttonsClicked.join() === 'action:review,action:agent:risk-radar' && actionsSeen.buttonsStayed.every(Boolean)
+    && ranInTerminal(plans('session')[2], 'review', WS, 'claude "/review-transcript"') && ranInTerminal(plans('session')[3], 'agent:risk-radar', WS, 'claude "Use the risk-radar agent"')),
+  'an action: address that is not one of the app\'s actions does nothing: the app refuses it and the page stays': verdict(
+    actionsSeen?.refused.length === 4 && actionsSeen.refusedStayed.every(Boolean)
+    && ev('action-refused').join('|') === actionsSeen.refused.join('|') && plans('session').length === 4),
+  'New Workspace…: the message offers "Set up in Claude Code"; the click would run claude "Set up my workspace" in Terminal in the new folder, which is the starter, unchanged': verdict(
+    one('dialog', 'new-workspace')?.buttons.join('|') === 'Set up in Claude Code|Not Now' && /^Your new workspace is ready\./.test(one('dialog', 'new-workspace').message)
+    && plans('new-workspace').length === 1 && ranInTerminal(plans('new-workspace')[0], 'setup', wsNew, 'claude "Set up my workspace"')
+    && !!one('new-workspace-open', 'new-workspace') && Array.isArray(newWorkspaceChanged) && newWorkspaceChanged.length === 0),
+  'the normal build: Info.plist says why the app sends Apple events to Terminal, and its signature has the apple-events entitlement': verdict(
+    appleEventsText === 'Chief of Staff for Managers opens Terminal in your workspace and starts Claude Code there.'
+    && /<key>com\.apple\.security\.automation\.apple-events<\/key>\s*<true\/>/.test(entitlements)),
   'the File menu has New Workspace… just above Open Sample Workspace…': verdict(
     fileMenu?.includes('New Workspace…') && fileMenu.indexOf('Open Sample Workspace…') === fileMenu.indexOf('New Workspace…') + 1),
   'screenshots of the Help page, the welcome window and the File menu': verdict(
@@ -550,6 +610,8 @@ const report = {
     pages: pages.map((p) => `${p.name}: ${p.error ? `ERROR ${p.error}` : 'ok'}${p.invalidDate ? ' INVALID DATE' : ''} (could not read ×${p.couldNotRead}, demo badge ${p.demoBadge ? 'on' : 'off'}, title "${p.title}")`),
     welcome: { firstLaunch: one('welcome', 'welcome'), afterChoose: one('main-after-welcome', 'welcome'), missing: one('welcome', 'missing'), missingResult },
     help,
+    actions: { clicks: actionsSeen, plans: plans('session'), refused: ev('action-refused'), newWorkspace: { dialog: one('dialog', 'new-workspace'), plans: plans('new-workspace'), changed: newWorkspaceChanged },
+      releaseInfoPlist: appleEventsText, releaseEntitlements: entitlements },
     fileMenu,
     boardOpen: one('board-open'),
     ageCells: one('age-cells'),

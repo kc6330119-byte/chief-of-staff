@@ -2,6 +2,11 @@
 //
 // MC_PROBE_WORKSPACE  open this folder at launch, through the same code as the folder picker
 // MC_PROBE_PICK       the folder "chosen" when the welcome window's Choose Folder… is clicked
+// MC_PROBE_NEW        the folder New Workspace… "saves" to, in place of the Save panel
+// MC_PROBE_SETUP      "1": "Set up in Claude Code" is "clicked" after New Workspace…; the message and its buttons are
+//                     printed, never shown
+// An action prints the steps it would take ("action {...}"), or "action refused" for one not in the list; it never
+//                     runs osascript, opens Terminal or uses the clipboard (actions.rs, Recorder).
 // MC_PROBE            a script run in the window after every page load; it drives the pages like a person
 //                     would and reports by requesting /__probe/<what>, which the core answers 404 and
 //                     this file prints. /__probe/done ends the app. /__probe/menu prints the File menu's items, and
@@ -18,6 +23,16 @@ pub fn workspace() -> Option<PathBuf> {
 
 pub fn picked_folder() -> Option<PathBuf> {
     std::env::var_os("MC_PROBE_PICK").map(PathBuf::from)
+}
+
+/// The folder a new workspace is copied to. Only for New Workspace…: Open Sample… still asks.
+pub fn saved_as(source: &str) -> Option<PathBuf> {
+    if source != "starter-workspace" { return None; }
+    std::env::var_os("MC_PROBE_NEW").map(PathBuf::from)
+}
+
+pub fn setup_clicked() -> bool {
+    std::env::var_os("MC_PROBE_SETUP").is_some_and(|v| v == "1")
 }
 
 pub fn log(line: &str) {

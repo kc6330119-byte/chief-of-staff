@@ -1,6 +1,7 @@
 // Markdown rendering in the core. Raw HTML in the source is escaped so it shows as text and never runs,
 // images show only their alt text, unsafe links are dropped, and "Manager-only note" items are removed
-// unless the caller asks for private notes.
+// unless the caller asks for private notes. An action: link (0.4.1) is drawn only on the Help page, and only in the
+// app; in anything read from a workspace it is dropped like any other unsafe link, leaving its text.
 use std::collections::HashSet;
 use std::fmt::Write;
 use std::sync::LazyLock;
@@ -27,6 +28,8 @@ pub fn escape_html(s: &str) -> String {
 }
 
 static SAFE_HREF: LazyLock<regex::Regex> = LazyLock::new(|| js::re(r"^(https?:|mailto:|#|\.{0,2}\/|[\w.-]+(\/|$|#|\.))", "i"));
+/// Help's links to the app's actions, such as action:setup; which actions there are is the app's to say.
+static ACTION_HREF: LazyLock<regex::Regex> = LazyLock::new(|| js::re(r"^action:[a-z0-9:-]+$", ""));
 static PRIVATE_MARK: LazyLock<regex::Regex> = LazyLock::new(|| js::re(r"^[\s*_]*manager-only note", "i"));
 
 fn options() -> Options<'static> {
@@ -41,6 +44,13 @@ fn options() -> Options<'static> {
 }
 
 type Private = HashSet<usize>;
+
+/// What the formatter is given: the private items to mark, and whether action: links are drawn.
+#[derive(Default)]
+struct Context {
+    private: Private,
+    actions: bool,
+}
 
 fn id(node: &AstNode<'_>) -> usize {
     node as *const _ as usize
@@ -77,7 +87,7 @@ fn task_checkbox_in_paragraph(node: &AstNode<'_>) -> Option<bool> {
     (first && !in_tight_list(node)).then_some(t.symbol.is_some())
 }
 
-create_formatter!(Formatter<Private>, {
+create_formatter!(Formatter<Context>, {
     NodeValue::Text(ref t) => |context, entering| {
         if entering { context.write_str(&escape_html(t))?; }
     },
@@ -109,10 +119,11 @@ create_formatter!(Formatter<Private>, {
         }
     },
     NodeValue::Link(ref l) => |context, entering| {
-        // An unsafe link shows only its text.
-        if SAFE_HREF.is_match(&l.url) {
+        // An unsafe link shows only its text. So does an action: link, unless this is the app's Help page.
+        let action = context.user.actions && ACTION_HREF.is_match(&l.url);
+        if action || SAFE_HREF.is_match(&l.url) {
             if entering {
-                context.write_str("<a href=\"")?;
+                context.write_str(if action { "<a class=\"action-link\" href=\"" } else { "<a href=\"" })?;
                 context.escape_href(&l.url)?;
                 context.write_str("\"")?;
                 if !l.title.is_empty() {
@@ -129,7 +140,7 @@ create_formatter!(Formatter<Private>, {
     NodeValue::Item(_) => |context, node, entering| {
         if entering {
             context.cr()?;
-            context.write_str(if context.user.contains(&id(node)) { "<li class=\"private-note\">" } else { "<li>" })?;
+            context.write_str(if context.user.private.contains(&id(node)) { "<li class=\"private-note\">" } else { "<li>" })?;
         } else {
             context.write_str("</li>")?;
             context.lf()?;
@@ -138,7 +149,7 @@ create_formatter!(Formatter<Private>, {
     NodeValue::TaskItem(ref t) => |context, node, entering| {
         if entering {
             context.cr()?;
-            context.write_str(if context.user.contains(&id(node)) { "<li class=\"private-note\">" } else { "<li>" })?;
+            context.write_str(if context.user.private.contains(&id(node)) { "<li class=\"private-note\">" } else { "<li>" })?;
             let loose_first_paragraph = node.first_child().is_some_and(|f| task_checkbox_in_paragraph(f).is_some());
             if !loose_first_paragraph { context.write_str(checkbox(t.symbol.is_some()))?; }
         } else {
@@ -150,7 +161,7 @@ create_formatter!(Formatter<Private>, {
         if !in_tight_list(node) {
             if entering {
                 context.cr()?;
-                context.write_str(if context.user.contains(&id(node)) { "<p class=\"private-note\">" } else { "<p>" })?;
+                context.write_str(if context.user.private.contains(&id(node)) { "<p class=\"private-note\">" } else { "<p>" })?;
                 if let Some(checked) = task_checkbox_in_paragraph(node) { context.write_str(checkbox(checked))?; }
             } else {
                 context.write_str("</p>")?;
@@ -240,6 +251,16 @@ pub struct Rendered {
 }
 
 pub fn render_markdown(src: &str, show_private: bool) -> Rendered {
+    render(src, show_private, false)
+}
+
+/// The Help page: help.md drawn as a summary is, with its action: links drawn as links when `actions` is set (the app),
+/// and as their text when it isn't (the test server).
+pub fn render_help(src: &str, actions: bool) -> String {
+    render(src, false, actions).html
+}
+
+fn render(src: &str, show_private: bool, actions: bool) -> Rendered {
     let arena = Arena::new();
     let opts = options();
     let doc = parse_document(&arena, src, &opts);
@@ -248,7 +269,7 @@ pub fn render_markdown(src: &str, show_private: bool) -> Rendered {
     let mut private = Private::new();
     handle_private(doc, &lines, show_private, &mut count, &mut private);
     let mut html = String::new();
-    Formatter::format_document(doc, &opts, &mut html, private).expect("formatting to a String");
+    Formatter::format_document(doc, &opts, &mut html, Context { private, actions }).expect("formatting to a String");
     // Each table fills a block of its own, which scrolls sideways when the table can't fit. Raw HTML in the source
     // is escaped above, so these tags are only ever the formatter's.
     let html = html.replace("<table>", "<div class=\"table-scroll\"><table>").replace("</table>", "</table></div>");
@@ -319,7 +340,7 @@ pub fn render_inline(src: &str) -> String {
     let single_paragraph = doc.children().count() == 1 && matches!(doc.first_child().unwrap().data().value, NodeValue::Paragraph);
     if !single_paragraph { return escape_html(src); }
     let mut html = String::new();
-    Formatter::format_document(doc, &opts, &mut html, Private::new()).expect("formatting to a String");
+    Formatter::format_document(doc, &opts, &mut html, Context::default()).expect("formatting to a String");
     html.strip_prefix("<p>").and_then(|h| h.strip_suffix("</p>\n")).map(str::to_string).unwrap_or(html)
 }
 
@@ -433,6 +454,21 @@ mod tests {
         assert!(!r.html.contains("javascript"), "{}", r.html);
         assert!(r.html.contains("<a href=\"https://example.com\">ok</a>"), "{}", r.html);
         assert!(!r.html.contains("<img"), "{}", r.html);
+    }
+
+    #[test]
+    fn an_action_link_from_a_workspace_is_only_its_text() {
+        let summary = "# A\n\n- [x](action:setup) and [y](action:agent:risk-radar)\n- <action:review> [z](ACTION:setup \"t\")\n\n| ID | Item |\n|---|---|\n| A-1 | [w](action:open-folder) |\n";
+        let r = render_markdown(summary, true);
+        assert!(!r.html.contains("<a"), "{}", r.html);
+        assert!(!r.html.to_lowercase().contains("action:setup\""), "{}", r.html);
+        assert!(r.html.contains("<li>x and y</li>"), "{}", r.html);
+        assert_eq!(render_inline("[x](action:setup)"), "x");
+        // Help draws them only when asked to, as the app asks.
+        assert_eq!(render_help("[x](action:setup)", false), "<p>x</p>\n");
+        assert_eq!(render_help("[x](action:setup) [y](action:agent:risk-radar)", true),
+            "<p><a class=\"action-link\" href=\"action:setup\">x</a> <a class=\"action-link\" href=\"action:agent:risk-radar\">y</a></p>\n");
+        assert_eq!(render_help("[x](action:Setup) [y](action:setup;ls)", true), "<p>x y</p>\n");
     }
 
     #[test]
