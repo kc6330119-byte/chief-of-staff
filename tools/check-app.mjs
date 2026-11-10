@@ -22,6 +22,9 @@
 //   - Meetings (0.3.2): the warnings are grouped by kind, most first, each with its count, and each group opens to its
 //     files; the counts add up to the total in the first line, which is the core's count and Today's last line;
 //     a screenshot with every group open
+//   - Meetings (0.4.2): the tracked table starts hidden with more than 15 rows and shown otherwise; its Show/Hide button
+//     hides and shows the filters, the table and the legend, the count reads "<n> tracked items" while hidden, a filter
+//     still works when it is shown, and the choice is kept on coming back at 1100 px; a screenshot with it hidden
 //   - the edit button is a pencil in the text colour, a meeting's tables fill their block, and a date in the Meetings
 //     table never wraps
 //   - no listening port or socket for the app's process, every page loads, the Board shows the action items with
@@ -518,6 +521,20 @@ const checklist = {
   'the edit button is an SVG pencil in the text colour, on Board cards and in the Library, at both widths': verdict(
     ev('edit-buttons').length === 4 && ev('edit-buttons').every((x) => x.count > 0 && x.notPencil === 0 && x.notTextColour === 0)),
   'a meeting\'s tables fill their block': verdict(ev('meeting-tables').length > 0 && ev('meeting-tables').every((x) => x.notFilling === 0)),
+  'Meetings: the tracked table starts hidden with more than 15 rows (shown otherwise); its Show/Hide button, clicked, shows and hides the filters, the table and the legend, keeps the heading, the count and itself, says "<n> tracked items" while hidden, a filter still works when shown, and the choice is kept on coming back': verdict((() => {
+    const t = one('tracked-toggle');
+    const kept = one('tracked-kept');
+    if (!t?.states) return false;
+    const ALL = ['tracked-filters', 'tracked-table', 'tracked-legend'];
+    const shown = (s) => s.text === 'Hide' && s.expanded === 'true' && s.shown.join() === ALL.join() && new RegExp(`^Showing \\d+ of ${t.rows}$`).test(s.count);
+    const hidden = (s) => s.text === 'Show' && s.expanded === 'false' && s.shown.length === 0 && s.count === `${t.rows} tracked items`;
+    const order = t.rows > 15 ? [hidden, shown, hidden, shown] : [shown, hidden, shown];
+    const firstShown = t.states.find(shown);
+    return t.states.length === order.length && t.states.every((s, i) => order[i](s) && s.headingShown && s.buttonShown && s.controls === ALL.join(' '))
+      && t.states.slice(1).every((s) => s.focused) && shown(t.end)
+      && !!firstShown && /^Showing \d+ of /.test(t.filtered) && t.filtered !== firstShown.count
+      && kept?.width === 1100 && kept.text === 'Hide' && kept.tableShown === true && shotsTaken.includes('session-meetings-tracked-hidden.png');
+  })()),
   'a date in the Meetings table never wraps, at 1440 px and at 1100 px wide': verdict(
     [1440, 1100].every((w) => ev('date-cells').some((x) => x.width === w && x.count > 0 && x.wrapped.length === 0))),
   'a card moves and the move is saved; a drag into Done closes it': verdict(one('card-moved')?.column === 'doing'
@@ -628,6 +645,7 @@ const report = {
     editButtons: ev('edit-buttons'),
     meetingTables: ev('meeting-tables'),
     meetingsWarnings: one('meetings-warnings'),
+    trackedToggle: { atFirstVisit: one('tracked-toggle'), keptAt1100: one('tracked-kept') },
     opensOn: one('ready'),
     boardLayout: ev('board-layout'),
     cardEdited: one('card-edited'),

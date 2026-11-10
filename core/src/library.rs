@@ -6,7 +6,7 @@ use serde_json::{json, Map, Value};
 
 use crate::agents::{agent_summaries, AgentSummary};
 use crate::markdown::render_markdown;
-use crate::meetings::{today_iso, COULD_NOT_READ};
+use crate::meetings::COULD_NOT_READ;
 use crate::paths::Workspace;
 use crate::store::write_json_atomic;
 use crate::{js, Error, Warning};
@@ -161,7 +161,7 @@ pub fn library_view(ws: &Workspace) -> Result<Value, Error> {
 
 // ---------- add / edit ----------
 
-fn clean(input: &Map<String, Value>, notes_files: &[String]) -> Result<Map<String, Value>, Error> {
+fn clean(input: &Map<String, Value>, notes_files: &[String], today: &str) -> Result<Map<String, Value>, Error> {
     static SPACE: LazyLock<regex::Regex> = LazyLock::new(|| js::re(r"\s+", ""));
     let text = |v: Option<&Value>, name: &str, max: usize| -> Result<String, Error> {
         let s = match v { Some(Value::String(s)) => js::trim(&SPACE.replace_all(s, " ")).to_string(), _ => String::new() };
@@ -193,7 +193,7 @@ fn clean(input: &Map<String, Value>, notes_files: &[String]) -> Result<Map<Strin
     let date_read = if js::truthy(input.get("date_read")) { input.get("date_read").cloned() } else { None };
     if let Some(d) = &date_read {
         if !is_iso_date(d) { return Err(err(400, "Date read must be a date (YYYY-MM-DD)")); }
-        if d.as_str().unwrap() > today_iso().as_str() { return Err(err(400, "Date read can’t be in the future")); }
+        if d.as_str().unwrap() > today { return Err(err(400, "Date read can’t be in the future")); }
     }
     if read == "No" {
         if date_read.is_some() { return Err(err(400, "A book you haven’t read can’t have a date read")); }
@@ -239,7 +239,7 @@ fn saved(mut view: Value, index: usize) -> Value {
 
 pub fn add_book(ws: &Workspace, input: &Map<String, Value>) -> Result<Value, Error> {
     let mut books = read_books(ws)?;
-    let book = Value::Object(clean(input, &notes_file_list(ws)?)?);
+    let book = Value::Object(clean(input, &notes_file_list(ws)?, &ws.today())?);
     if let Some(n) = book["notes"].as_str() { ws.resolve(n)?; }
     if books.iter().any(|b| same_book(b, &book)) { return Err(err(400, "That book is already in the library")); }
     books.push(book);
@@ -264,7 +264,7 @@ pub fn edit_book(ws: &Workspace, index: usize, input: &Map<String, Value>) -> Re
         (Some(existing), Some(o)) if same_book(existing, o) => {}
         _ => return Err(changed()),
     }
-    let book = clean(input, &notes_file_list(ws)?)?;
+    let book = clean(input, &notes_file_list(ws)?, &ws.today())?;
     if let Some(n) = book["notes"].as_str() { ws.resolve(n)?; }
     let as_value = Value::Object(book.clone());
     if books.iter().enumerate().any(|(i, b)| i != index && same_book(b, &as_value)) {

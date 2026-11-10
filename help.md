@@ -61,6 +61,7 @@ The window title shows which folder is open.
 - **Meetings**: every summary, newest first. Click one to read it. Above the list, "Tracked items across
   all meetings" shows each action item with its ID, owner, age and latest status. **Hide closed** hides the
   items closed on your Board, and those whose latest summary says done or dropped.
+  **Hide** and **Show** fold the table away and back; with more than 15 rows it starts hidden.
 - **Board**: three columns, To do, Doing and Done. Every action item with an ID is a card. It stays in To
   do until you move it. Drag a card, or use its arrows. A card in Done is closed.
 - **People**: you, then your reports, your manager, peers and others, in the order of `people.md`. Each
@@ -70,6 +71,7 @@ The window title shows which folder is open.
   one card each. A skill's card says "Skill" and the command that runs it, such as `/review-transcript`.
   The page only shows them, and **Ask in Claude Code** on an agent's card, or **Run in Claude Code** on the
   skill's, starts it in Terminal. Below the cards, "Rules learned" is your log of corrections.
+  A review date counts to the sample's date in the sample, and to today in your own workspace.
 - **Library**: your books, your ratings and your own notes on them.
 
 ### Review the sample transcript

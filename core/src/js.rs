@@ -358,7 +358,7 @@ mod tests {
         std::fs::write(dir.join("meeting-notes/2026-01-01_a.md"), "# T\n\n**Date:** Jan 1, 2026 | **Type:** 1:1\n\n## Action Items\n\n| # | Action Item | Owner | Status |\n|---|---|---|---|\n| 1 | Do _it_ (suggested) | A and B | Open |\n").unwrap();
         std::fs::write(dir.join("library/books.json"), "[]").unwrap();
         let ws = crate::Workspace::new(&dir);
-        crate::agents::load_agents(&ws).unwrap();
+        crate::agents::load_agents(&ws, None).unwrap();
         crate::meetings::meetings_overview(&ws, true).unwrap();
         crate::library::library_view(&ws).unwrap();
         let _ = crate::markdown::render_markdown("x", false);

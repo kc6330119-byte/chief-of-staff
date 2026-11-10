@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 use serde_json::{json, Value};
 
 use crate::markdown::{render_inline, split_lines};
-use crate::meetings::{days_between, parse_dates, today_iso, COULD_NOT_READ};
+use crate::meetings::{days_between, parse_dates, COULD_NOT_READ};
 use crate::paths::Workspace;
 use crate::{js, Error, Warning};
 
@@ -94,7 +94,7 @@ fn parse_rules(body: &str) -> (Option<String>, Vec<String>) {
     (caption, rules)
 }
 
-fn parse_instruction_file(ws: &Workspace, rel: &str, fallback_name: &str) -> Result<Value, Error> {
+fn parse_instruction_file(ws: &Workspace, rel: &str, fallback_name: &str, as_of: &As) -> Result<Value, Error> {
     let mut warnings = Vec::new();
     let mut warn = |message: String| warnings.push(Warning::new(rel, message));
     let src = ws.read_text(rel)?;
@@ -120,8 +120,7 @@ fn parse_instruction_file(ws: &Workspace, rel: &str, fallback_name: &str) -> Res
     let (caption, rules) = parse_rules(body);
     if rules.is_empty() { warn(format!("rules {COULD_NOT_READ}: no numbered list found")); }
 
-    let today = today_iso();
-    let days_since = last_reviewed.as_deref().and_then(|d| days_between(d, &today));
+    let days_since = last_reviewed.as_deref().and_then(|d| days_between(d, &as_of.date)).map(|d| as_of.days(d));
     let tools = fm.get("tools").filter(|t| !t.is_empty());
     Ok(json!({
         "file": rel,
@@ -141,12 +140,29 @@ fn parse_instruction_file(ws: &Workspace, rel: &str, fallback_name: &str) -> Res
     }))
 }
 
-pub fn load_agents(ws: &Workspace) -> Result<Value, Error> {
+/// The date review age counts to: today, or in the sample its as-of date, where a "Last reviewed" after it is 0 days.
+struct As {
+    date: String,
+    sample: bool,
+}
+
+impl As {
+    fn days(&self, d: i64) -> i64 {
+        if self.sample { d.max(0) } else { d }
+    }
+}
+
+/// The cards, with review age counted to today, or in the sample to `sample_as_of` (meetings::sample_as_of).
+pub fn load_agents(ws: &Workspace, sample_as_of: Option<&str>) -> Result<Value, Error> {
+    let as_of = match sample_as_of {
+        Some(d) => As { date: d.to_string(), sample: true },
+        None => As { date: ws.today(), sample: false },
+    };
     let mut warnings: Vec<Value> = Vec::new();
     let mut cards = Vec::new();
 
     if ws.exists("CLAUDE.md")? {
-        let mut card = parse_instruction_file(ws, "CLAUDE.md", "Coach")?;
+        let mut card = parse_instruction_file(ws, "CLAUDE.md", "Coach", &as_of)?;
         card["name"] = json!("Coach");
         card["role"] = json!("coach");
         cards.push(card);
@@ -156,7 +172,7 @@ pub fn load_agents(ws: &Workspace) -> Result<Value, Error> {
 
     let files = ws.list_dir(AGENTS_DIR, ".md")?;
     for f in files.iter().flatten() {
-        let mut card = parse_instruction_file(ws, &format!("{AGENTS_DIR}/{f}"), f.strip_suffix(".md").unwrap_or(f))?;
+        let mut card = parse_instruction_file(ws, &format!("{AGENTS_DIR}/{f}"), f.strip_suffix(".md").unwrap_or(f), &as_of)?;
         card["role"] = json!("agent");
         cards.push(card);
     }
@@ -166,7 +182,7 @@ pub fn load_agents(ws: &Workspace) -> Result<Value, Error> {
     for dir in &skills {
         let rel = format!("{SKILLS_DIR}/{dir}/SKILL.md");
         if !ws.exists(&rel)? { continue; }
-        let mut card = parse_instruction_file(ws, &rel, dir)?;
+        let mut card = parse_instruction_file(ws, &rel, dir, &as_of)?;
         card["role"] = json!("skill");
         card["command"] = card["id"].as_str().map_or(Value::Null, |id| json!(format!("/{id}")));
         cards.push(card);
@@ -178,7 +194,7 @@ pub fn load_agents(ws: &Workspace) -> Result<Value, Error> {
         "agentsFolderFound": files.is_some(),
         "agentsFolder": AGENTS_DIR,
         "skillsFolder": SKILLS_DIR,
-        "today": today_iso(),
+        "today": as_of.date,
         "reviewAfterDays": REVIEW_AFTER_DAYS,
         "warnings": warnings,
     }))
@@ -194,7 +210,8 @@ pub struct AgentSummary {
 /// Sources line names explicitly (a folder such as "library/" doesn't count as naming a file).
 pub fn agent_summaries(ws: &Workspace) -> Result<Vec<AgentSummary>, Error> {
     static NOTES: LazyLock<regex::Regex> = LazyLock::new(|| js::re(r"\blibrary\/[\w.-]+\.md\b", ""));
-    let agents = load_agents(ws)?;
+    // Only the names and Sources are used, so review age counts to today.
+    let agents = load_agents(ws, None)?;
     // A skill is not one of the readers a book names.
     Ok(agents["cards"].as_array().unwrap().iter().filter(|c| c["role"] != "skill" && c["name"].as_str().is_some_and(|n| !n.is_empty())).map(|c| {
         let sources = c["sources"].as_str();

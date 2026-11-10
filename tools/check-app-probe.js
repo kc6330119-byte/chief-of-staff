@@ -84,6 +84,37 @@
     await sleep(100);
     return result;
   };
+  // Meetings' tracked table (0.4.2): how it starts, by the 15-row rule; the button clicked as a person clicks it, with
+  // the table shown, a filter changed and put back, then hidden (a screenshot), and shown again for the rest of the session.
+  const trackedToggle = async () => {
+    const rows = (await json('/api/meetings')).tracked.length;
+    const button = document.getElementById('tracked-toggle');
+    if (!button) return { button: false, rows };
+    const look = () => ({
+      text: button.textContent.trim(),
+      expanded: button.getAttribute('aria-expanded'),
+      controls: button.getAttribute('aria-controls'),
+      shown: ['tracked-filters', 'tracked-table', 'tracked-legend'].filter((id) => document.getElementById(id)?.getClientRects().length > 0),
+      headingShown: document.getElementById('tracked-h')?.getClientRects().length > 0,
+      buttonShown: button.getClientRects().length > 0,
+      count: document.getElementById('tracked-count').textContent.trim(),
+      focused: document.activeElement === button,
+    });
+    const press = async () => { button.focus(); button.click(); await sleep(200); return look(); };
+    const states = [look()];
+    if (!states[0].shown.length) states.push(await press());
+    // With the table shown, "Hide suggested" changes the count and is put back.
+    const suggested = document.getElementById('hide-suggested');
+    suggested.click();
+    await sleep(150);
+    const filtered = document.getElementById('tracked-count').textContent.trim();
+    suggested.click();
+    await sleep(150);
+    states.push(await press());
+    await shot('meetings-tracked-hidden');
+    states.push(await press());
+    return { rows, states, filtered, end: look() };
+  };
   const switchState = () => ({ on: document.getElementById('private-switch')?.checked ?? null, privateNotesShown: app.querySelectorAll('.private-note').length });
 
   // The window's inner width, set through the app (the page can't resize its own window).
@@ -474,6 +505,8 @@
           // so a span on one line is not mistaken for a wrap.
           if (name === 'meetings') {
             if (width === 1440) await report('meetings-warnings', await meetingsWarnings());
+            if (width === 1440) await report('tracked-toggle', await trackedToggle());
+            else await report('tracked-kept', { width, text: document.getElementById('tracked-toggle')?.textContent.trim(), tableShown: document.getElementById('tracked-table')?.getClientRects().length > 0 });
             const cells = [...app.querySelectorAll('#tracked-body td.num')];
             const ids = [...app.querySelectorAll('#tracked-body td.id')];
             if (width === 1440) await report('age-cells', { count: cells.length, wrapped: cells.filter((td) => lines(td) > 1).map((td) => td.textContent), windowWidth: window.innerWidth });

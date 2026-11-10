@@ -124,13 +124,17 @@ async function launch(root, env) {
   return { why: `no answer within ${ATTEMPT_MS / 1000} s`, output };
 }
 
-export async function startSite({ prepare, demo = true, env = {} } = {}) {
+// "Today" for every test server (MC_TODAY, which only the test server reads), so no answer depends on the real date: the
+// day 0.4.1 was released, after every date the tests write into a summary. A test can pick another with { today }.
+export const TODAY = '2026-10-24';
+
+export async function startSite({ prepare, demo = true, env = {}, today = TODAY } = {}) {
   buildCore();
   const root = copyData({ prepare, demo });
   const failures = [];
   let started = null;
   for (let attempt = 1; attempt <= START_ATTEMPTS && !started; attempt++) {
-    const result = await launch(root, env);
+    const result = await launch(root, { MC_TODAY: today, ...env });
     if (result.child) started = result;
     else failures.push(`attempt ${attempt}: ${result.why}${result.output ? `\n${result.output}` : ''}`);
   }
@@ -156,6 +160,7 @@ export async function startSite({ prepare, demo = true, env = {} } = {}) {
 
   const site = {
     root,
+    today,
     port,
     base,
     output,

@@ -3,11 +3,15 @@
 // changes apart from "Last reviewed", and the app answers for the sample exactly as it did in 0.3.2.
 // 0.4.0 step 2 moved the Action items rules, these two with them, into the review-transcript skill: the rules are read
 // there now, and the step 1 CLAUDE.md that 0.3.2 is compared with is rebuilt from CLAUDE.md and the skill.
+// 0.4.2: the answers are read with "today" fixed (MC_TODAY, as every test server is). With the real date, 0.3.2's coach
+// fell due 30 days after its 2026-10-08 review, and the Agents and Today answers parted on that alone; the sample's
+// review dates now count to its newest meeting as well.
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
+import { everyAnswer } from './helpers/answers.js';
 import { claudeAsInStep1, SKILL } from './helpers/coach.js';
 import { SITE_DIR, startSite } from './helpers/site.js';
 
@@ -61,29 +65,6 @@ describe('both review-transcript skills have the two rules, and CLAUDE.md before
     });
   }
 });
-
-// Every read the app offers, for the sample's data.
-async function everyAnswer(site) {
-  const paths = ['/api/config', '/api/today', '/api/today?week=this', '/api/today?week=last', '/api/meetings', '/api/board',
-    '/api/library', '/api/corrections', '/api/agents', '/api/people', '/api/people?private=1', '/api/help'];
-  for (const m of (await site.get('/api/meetings')).json.meetings) {
-    paths.push(`/api/meeting?file=${encodeURIComponent(m.file)}`, `/api/meeting?file=${encodeURIComponent(m.file)}&private=1`);
-  }
-  for (const f of fs.readdirSync(path.join(site.root, 'library')).filter((x) => x.endsWith('.md')).sort()) {
-    paths.push(`/api/library/notes?file=${encodeURIComponent(f)}`);
-  }
-  for (const p of (await site.get('/api/people')).json.groups.flatMap((g) => g.people)) {
-    paths.push(`/api/people/${encodeURIComponent(p.name)}`, `/api/people/${encodeURIComponent(p.name)}?private=1`);
-  }
-  const root = path.basename(site.root);
-  const out = {};
-  for (const p of paths) {
-    const res = await site.get(p);
-    // Each copy lives in its own scratch folder, whose name /api/config reports.
-    out[p] = `${res.status} ${res.text.split(root).join('<root>')}`;
-  }
-  return out;
-}
 
 describe('the sample\'s answers from every API, with step 1\'s CLAUDE.md, are 0.3.2\'s', () => {
   // Step 1's CLAUDE.md and no .claude/skills/ or settings.json: the sample as 0.3.3 shipped it.

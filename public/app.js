@@ -1,8 +1,9 @@
 // Chief of Staff front end: a small hash router and one render function per page.
 const app = document.getElementById('app');
 
-// Page state lives in memory only, so every switch is back to its default on reload.
-const state = { config: null, showPrivate: false, hideClosed: false, hideSuggested: true, owner: '', attendee: '', boardOwner: '', boardShowSuggested: false };
+// Page state lives in memory only, so every switch is back to its default on reload. trackedOpen is null until the
+// tracked table on Meetings is first shown or hidden.
+const state = { config: null, showPrivate: false, hideClosed: false, hideSuggested: true, owner: '', attendee: '', boardOwner: '', boardShowSuggested: false, trackedOpen: null };
 
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -1175,6 +1176,9 @@ function todaySearch(input, out, asOf) {
 
 // ---------- Meetings ----------
 
+// The tracked table starts hidden when it has more rows than this, until it is first shown or hidden.
+const TRACKED_SHOWN_MAX = 15;
+
 async function renderMeetings(params = {}) {
   // #/meetings?attendee=<name> opens it with that attendee chosen.
   if (params.attendee !== undefined) state.attendee = params.attendee;
@@ -1198,31 +1202,34 @@ async function renderMeetings(params = {}) {
     ${groupedWarningsPanel(data.warnings, data.warningGroups)}
     ${peopleMissing}
 
-    <section class="panel" aria-labelledby="tracked-h">
+    <section class="panel tracked-panel" id="tracked-panel" aria-labelledby="tracked-h">
       <div class="panel-head">
         <div>
           <h2 id="tracked-h">Tracked items across all meetings</h2>
-          <p class="muted"><strong id="tracked-count" class="count"></strong> · age in days ${esc(asOf)} · latest status word for word</p>
+          <p class="muted"><strong id="tracked-count" class="count"></strong><span id="tracked-about"> · age in days ${esc(asOf)} · latest status word for word</span></p>
         </div>
-        <div class="filters">
-          <label class="check">
-            <input type="checkbox" id="hide-closed" ${state.hideClosed ? 'checked' : ''}>
-            Hide closed
-          </label>
-          <label class="check">
-            <input type="checkbox" id="hide-suggested" ${state.hideSuggested ? 'checked' : ''}>
-            Hide suggested
-          </label>
-          <label class="select">
-            Owner
-            <select id="owner-filter">
-              <option value="">Everyone</option>
-              ${data.owners.map((o) => `<option value="${esc(o)}" ${o === state.owner ? 'selected' : ''}>${esc(o)}</option>`).join('')}
-            </select>
-          </label>
+        <div class="tracked-tools">
+          <div class="filters" id="tracked-filters">
+            <label class="check">
+              <input type="checkbox" id="hide-closed" ${state.hideClosed ? 'checked' : ''}>
+              Hide closed
+            </label>
+            <label class="check">
+              <input type="checkbox" id="hide-suggested" ${state.hideSuggested ? 'checked' : ''}>
+              Hide suggested
+            </label>
+            <label class="select">
+              Owner
+              <select id="owner-filter">
+                <option value="">Everyone</option>
+                ${data.owners.map((o) => `<option value="${esc(o)}" ${o === state.owner ? 'selected' : ''}>${esc(o)}</option>`).join('')}
+              </select>
+            </label>
+          </div>
+          <button type="button" class="btn btn-small" id="tracked-toggle" aria-controls="tracked-filters tracked-table tracked-legend" aria-describedby="tracked-h"></button>
         </div>
       </div>
-      <div class="table-wrap tracked-wrap">
+      <div class="table-wrap tracked-wrap" id="tracked-table">
         <table class="data tracked">
           <colgroup>
             <col class="c-id"><col class="c-item"><col class="c-owner"><col class="c-due"><col class="c-first"><col class="c-age"><col class="c-status"><col class="c-from">
@@ -1242,7 +1249,7 @@ async function renderMeetings(params = {}) {
           <tbody id="tracked-body"></tbody>
         </table>
       </div>
-      <p class="muted small legend">
+      <p class="muted small legend" id="tracked-legend">
         <span class="tag tag-suggested">suggested</span> not said in the meeting ·
         <span class="muted">no ID</span> not tracked across meetings ·
         <span class="tag tag-problem">check</span> something in the row doesn't fit the summary format; the problem is listed under the item
@@ -1281,12 +1288,16 @@ async function renderMeetings(params = {}) {
   const background = (r) => r.kind === 'earlier item' && !r.id;
   // Closed: its latest summary says Done or Dropped, or it is in Done on the Board.
   const closed = (r) => r.state !== 'open' || r.column === 'done';
+  // Shown or hidden as last chosen while the app is open; until then, hidden when there are many rows.
+  const trackedOpen = () => state.trackedOpen ?? data.tracked.length <= TRACKED_SHOWN_MAX;
   const renderRows = () => {
     const rows = data.tracked.filter((r) =>
       !(state.hideClosed && closed(r)) &&
       !(state.hideSuggested && r.suggested) &&
       !(state.owner && r.owner !== state.owner));
-    document.getElementById('tracked-count').textContent = `Showing ${rows.length} of ${data.tracked.length}`;
+    document.getElementById('tracked-count').textContent = trackedOpen()
+      ? `Showing ${rows.length} of ${data.tracked.length}`
+      : plural(data.tracked.length, 'tracked item', 'tracked items');
     document.getElementById('tracked-body').innerHTML = rows.map((r) => `
       <tr class="${closed(r) ? 'is-closed' : ''}">
         <td class="id">${r.id ? esc(r.id) : '<span class="muted">no ID</span>'}</td>
@@ -1307,8 +1318,19 @@ async function renderMeetings(params = {}) {
         <td class="sources">${r.sources.map((s) => `<a href="#/meetings/${encodeURIComponent(s.file)}" title="${esc(s.kind)} in ${esc(s.file)}">${fmtDate(s.date, { month: 'short', day: 'numeric' })}</a>`).join('')}</td>
       </tr>`).join('');
   };
-  renderRows();
+  // Hidden, the panel keeps its heading, the count of all its rows and the button.
+  const showTracked = () => {
+    const open = trackedOpen();
+    for (const id of ['tracked-filters', 'tracked-table', 'tracked-legend', 'tracked-about']) document.getElementById(id).hidden = !open;
+    document.getElementById('tracked-panel').classList.toggle('is-collapsed', !open);
+    const toggle = document.getElementById('tracked-toggle');
+    toggle.textContent = open ? 'Hide' : 'Show';
+    toggle.setAttribute('aria-expanded', String(open));
+    renderRows();
+  };
+  showTracked();
 
+  document.getElementById('tracked-toggle').addEventListener('click', () => { state.trackedOpen = !trackedOpen(); showTracked(); });
   document.getElementById('hide-closed').addEventListener('change', (e) => { state.hideClosed = e.target.checked; renderRows(); });
   document.getElementById('hide-suggested').addEventListener('change', (e) => { state.hideSuggested = e.target.checked; renderRows(); });
   document.getElementById('owner-filter').addEventListener('change', (e) => { state.owner = e.target.value; renderRows(); });

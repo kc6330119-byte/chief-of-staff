@@ -23,8 +23,11 @@ function element(id) {
     classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
     offsetHeight: 0,
     getBoundingClientRect: () => ({ top: 0, left: 0, width: 0, height: 0 }),
-    setAttribute() {},
-    removeAttribute() {},
+    // Attributes the script sets after drawing (aria-expanded, say) are kept, so a test can read them.
+    attributes: {},
+    setAttribute(name, value) { this.attributes[name] = String(value); },
+    getAttribute(name) { return this.attributes[name] ?? null; },
+    removeAttribute(name) { delete this.attributes[name]; },
     focus() {},
     // A dialog opens and closes; scrolling to an element is noted, so a test can see where the page was taken.
     showModal() { this.open = true; },
@@ -39,6 +42,17 @@ function element(id) {
       Object.assign(this, props);
       for (const fn of listeners[type] || []) await fn({ ...props, type, target: target ?? this, currentTarget: this, preventDefault() {} });
     },
+  };
+}
+
+// The page's clock: noon on the test server's "today", so the page's own date (a form's default and latest date, the
+// greeting) is the same on every run. A Date given a time is untouched.
+function fixedDate(today) {
+  const [y, m, d] = today.split('-').map(Number);
+  const now = new Date(y, m - 1, d, 12).getTime();
+  return class extends Date {
+    constructor(...args) { super(...(args.length ? args : [now])); }
+    static now() { return now; }
   };
 }
 
@@ -64,6 +78,7 @@ export async function openPage(site, hash, { config = { demo: true } } = {}) {
     location: { hash },
     fetch: (p, opts) => fetch(new URL(p, site.base + '/'), opts),
     ResizeObserver: class { observe() {} disconnect() {} },
+    Date: fixedDate(site.today),
     requestAnimationFrame: (fn) => setTimeout(fn, 0),
     console,
     URL,
@@ -81,6 +96,13 @@ export async function openPage(site, hash, { config = { demo: true } } = {}) {
 
   const page = {
     el: byId,
+    // Opens another address in the same page, as following a link does; what the page keeps in its state stays. The
+    // elements the last page drew are dropped, with their listeners, as a page drawn anew replaces them.
+    async go(to) {
+      for (const id of elements.keys()) if (id !== 'app') elements.delete(id);
+      context.location.hash = to;
+      await vm.runInContext('route()', context);
+    },
     // document.body, where the router marks the page it opened (body.dataset.page).
     body: document.body,
     // Everything drawn so far: the page, plus whatever was drawn into its elements afterwards.

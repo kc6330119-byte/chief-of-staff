@@ -10,11 +10,11 @@ A Rust core reads and writes the files and answers every request. The interface 
 JavaScript inside a native macOS window (the system's own WebKit, through Tauri). There is no server, no
 browser and no network port.
 
-Version 0.4.1, built from Mission Control Native 0.1.1.
+Version 0.4.2, built from Mission Control Native 0.1.1.
 
 ## Download
 
-Download `Chief-of-Staff-for-Managers-0.4.1-universal.dmg` from [the latest release][latest]. It runs on
+Download `Chief-of-Staff-for-Managers-0.4.2-universal.dmg` from [the latest release][latest]. It runs on
 macOS 13 or later, on Apple silicon and Intel Macs.
 
 1. Open the `.dmg`. A window shows the app and a shortcut to Applications.
@@ -443,7 +443,9 @@ later.
 
 `npm test` runs the test suite against the Rust core, using the sample workspace in `sample-workspace/` as
 its data (set `MC_TEST_DATA` to use another folder). The tests reach the core through a small test server
-that listens on 127.0.0.1 while they run; it is never part of the app.
+that listens on 127.0.0.1 while they run; it is never part of the app. Each test server is given "today" in
+`MC_TODAY` (2026-10-24 unless a test picks another), so no test depends on the real date. Only the test
+server reads it; the app always counts from the real date.
 
 `SPEC.md` is the spec of Mission Control Native 0.1.1, kept as it was, with every decision made while
 building it.

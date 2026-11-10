@@ -46,8 +46,9 @@ This section is for the first run only. When the manager types "Set up my worksp
    then one row per person, with names spelled exactly as given.
 3. In this file, in every agent in .claude/agents/ and in the review-transcript skill in
    .claude/skills/, replace "the manager" with the manager's first name where it names
-   them, keeping the grammar right. Put the company name in
-   templates/meeting-summary-template.md in place of <Company>.
+   them, keeping the grammar right, and set "Last reviewed:" to today's date, written
+   YYYY-MM-DD. Put the company name in templates/meeting-summary-template.md in place of
+   <Company>.
 4. Offer to start a goals file in goals/ for each report. Write only what the manager
    tells you.
 5. List every file you changed and what changed in each. Then delete this "Setting up

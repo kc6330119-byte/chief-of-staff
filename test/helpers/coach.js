@@ -21,15 +21,17 @@ export const STANDING_RULES = `## Standing rules
 
 `;
 
-// Step 3 of the starter's "Setting up this workspace", before and after 0.4.0 step 3 added the skill to it.
+// Step 3 of the starter's "Setting up this workspace", before 0.4.0 step 3 added the skill to it, and as it is now
+// (0.4.2 added setting "Last reviewed").
 export const SETUP_STEP3_BEFORE = `3. In this file and in every agent in .claude/agents/, replace "the manager" with the
    manager's first name where it names them, keeping the grammar right. Put the company
    name in templates/meeting-summary-template.md in place of <Company>.
 `;
 export const SETUP_STEP3 = `3. In this file, in every agent in .claude/agents/ and in the review-transcript skill in
    .claude/skills/, replace "the manager" with the manager's first name where it names
-   them, keeping the grammar right. Put the company name in
-   templates/meeting-summary-template.md in place of <Company>.
+   them, keeping the grammar right, and set "Last reviewed:" to today's date, written
+   YYYY-MM-DD. Put the company name in templates/meeting-summary-template.md in place of
+   <Company>.
 `;
 
 // The SHA-256 of each CLAUDE.md as committed in step 1 (41db239), which 0.3.3 left as it is.

@@ -467,7 +467,7 @@ impl Core {
             }
             Route::AddCorrection => corrections::add_correction(ws, body)?,
             Route::Agents => {
-                let view = agents::load_agents(ws)?;
+                let view = agents::load_agents(ws, meetings::sample_as_of(ws, self.demo())?.as_deref())?;
                 self.log_warnings(&view["warnings"]);
                 view
             }

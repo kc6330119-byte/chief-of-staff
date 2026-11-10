@@ -8,13 +8,27 @@ use crate::Error;
 #[derive(Debug, Clone)]
 pub struct Workspace {
     root: PathBuf,
+    /// A fixed "today", set only by the test server; the app never sets it.
+    today: Option<String>,
 }
 
 impl Workspace {
     /// `root` must be absolute. It is not created if missing.
     pub fn new(root: impl Into<PathBuf>) -> Self {
         let root = normalize(&root.into());
-        Workspace { root }
+        Workspace { root, today: None }
+    }
+
+    /// The same workspace with "today" fixed at `date` (YYYY-MM-DD), so nothing read from it depends on the real date.
+    /// Only the test server calls this.
+    pub fn with_today(mut self, date: impl Into<String>) -> Self {
+        self.today = Some(date.into());
+        self
+    }
+
+    /// Today as YYYY-MM-DD: this computer's calendar date, unless it was fixed. Every reader takes its "today" from here.
+    pub fn today(&self) -> String {
+        self.today.clone().unwrap_or_else(|| chrono::Local::now().format("%Y-%m-%d").to_string())
     }
 
     pub fn root(&self) -> &Path {

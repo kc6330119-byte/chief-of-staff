@@ -8,7 +8,7 @@ use serde_json::{json, Map, Value};
 
 use crate::board::{self, Board, Card};
 use crate::briefing::{self, Week};
-use crate::meetings::{days_between, overview, summary_files, today_iso, Meeting};
+use crate::meetings::{days_between, overview, summary_files, Meeting, Overview};
 use crate::people::{People, Person, FILE as PEOPLE_FILE};
 use crate::paths::Workspace;
 use crate::{agents, js, ledger, notes, Error};
@@ -195,9 +195,10 @@ fn people_rows(b: &Board, people: &People, me: &str, items: &[Item], notes: &not
 }
 
 /// The foot: how many things could not be read (the Meetings page's count) and how many agents have a review due
-/// (the Agents page's count; none when the agents can't be read).
-fn foot(ws: &Workspace, could_not_read: usize) -> Value {
-    let review_due = agents::load_agents(ws).ok().map(|a| a["cards"].as_array().map_or(0, |c| c.iter().filter(|c| c["reviewDue"] == true).count()));
+/// (the Agents page's count, to the same date; none when the agents can't be read).
+fn foot(ws: &Workspace, ov: &Overview, could_not_read: usize) -> Value {
+    let sample_as_of = ov.as_of_is_newest_meeting.then_some(ov.as_of.as_str());
+    let review_due = agents::load_agents(ws, sample_as_of).ok().map(|a| a["cards"].as_array().map_or(0, |c| c.iter().filter(|c| c["reviewDue"] == true).count()));
     json!({ "couldNotRead": could_not_read, "agentsReviewDue": review_due })
 }
 
@@ -226,7 +227,7 @@ fn briefing_of(ws: &Workspace, b: &Board, week: Week) -> Result<Value, Error> {
 
 fn view(ws: &Workspace, demo: bool, acted: Option<&str>, week: Week) -> Result<Value, Error> {
     if summary_files(ws)?.is_empty() {
-        let mut out = empty("no-summaries", today_iso(), false, None, Value::Null);
+        let mut out = empty("no-summaries", ws.today(), false, None, Value::Null);
         out["briefing"] = match ledger::load(ws)? {
             ledger::Loaded::Unreadable(_) => Value::Null,
             _ => briefing_of(ws, &board::build(ws, demo)?, week)?,
@@ -236,7 +237,8 @@ fn view(ws: &Workspace, demo: bool, acted: Option<&str>, week: Week) -> Result<V
     if let ledger::Loaded::Unreadable(why) = ledger::load(ws)? {
         // The Meetings page counts the ledger among the things it could not read, and so does the foot.
         let ov = overview(ws, demo)?;
-        return Ok(empty("ledger-unreadable", ov.as_of, ov.as_of_is_newest_meeting, Some(ledger::unreadable_message(&why)), foot(ws, ov.warnings.len() + 1)));
+        let foot = foot(ws, &ov, ov.warnings.len() + 1);
+        return Ok(empty("ledger-unreadable", ov.as_of, ov.as_of_is_newest_meeting, Some(ledger::unreadable_message(&why)), foot));
     }
     let b = board::build(ws, demo)?;
     let people = &b.ov.people;
@@ -278,7 +280,7 @@ fn view(ws: &Workspace, demo: bool, acted: Option<&str>, week: Week) -> Result<V
     out.insert("groups".into(), json!(groups));
     out.insert("counts".into(), counts);
     out.insert("people".into(), people_view);
-    out.insert("foot".into(), foot(ws, b.ov.warnings.len()));
+    out.insert("foot".into(), foot(ws, &b.ov, b.ov.warnings.len()));
     out.insert("meetings".into(), json!(b.ov.meetings.iter().map(|m| json!({ "file": m.file, "date": m.date, "title": m.title })).collect::<Vec<_>>()));
     out.insert("briefing".into(), briefing::build(ws, &b, people, me.as_deref(), &all, confirm.len(), week)?);
     // After an action: the item as it is now, wherever it is listed, so the page can update its row in place.

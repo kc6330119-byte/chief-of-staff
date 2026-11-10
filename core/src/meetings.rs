@@ -33,10 +33,6 @@ pub fn iso(y: i64, m: u32, d: u32) -> String {
     format!("{y:04}-{m:02}-{d:02}")
 }
 
-pub fn today_iso() -> String {
-    chrono::Local::now().format("%Y-%m-%d").to_string()
-}
-
 /// Whole days from a to b, or None if either is not a real date.
 pub fn days_between(a: &str, b: &str) -> Option<i64> {
     Some(js::date_days(b)? - js::date_days(a)?)
@@ -648,11 +644,18 @@ pub struct Overview {
     pub warnings: Vec<Warning>,
 }
 
+/// In the sample, the date its pages count to: its newest meeting's. None in any other workspace, or a sample with no
+/// dated meeting, which count to today.
+pub fn sample_as_of(ws: &Workspace, demo: bool) -> Result<Option<String>, Error> {
+    if !demo { return Ok(None); }
+    Ok(load_meetings(ws)?.iter().find_map(|m| m.date.clone()))
+}
+
 pub fn overview(ws: &Workspace, demo: bool) -> Result<Overview, Error> {
     let meetings = load_meetings(ws)?;
     let people = load_people(ws)?;
     let newest = meetings.iter().find_map(|m| m.date.clone());
-    let as_of = match (&newest, demo) { (Some(n), true) => n.clone(), _ => today_iso() };
+    let as_of = match (&newest, demo) { (Some(n), true) => n.clone(), _ => ws.today() };
     let (rows, tracked_warnings) = build_tracked(&meetings, &people, &as_of);
     let warnings = meetings.iter().flat_map(|m| m.warnings.clone()).chain(tracked_warnings).chain(people.warnings.clone()).collect();
     Ok(Overview { as_of_is_newest_meeting: demo && newest.is_some(), meetings, people, as_of, rows, warnings })

@@ -97,7 +97,7 @@ try {
   const archs = sh('lipo', ['-archs', exe]).stdout.trim().split(/\s+/).sort();
   check('the app holds Apple silicon and Intel code (lipo: arm64, x86_64)', archs.join() === 'arm64,x86_64', archs.join(' '));
 
-  // 5. No home path and no probe, in any file of the app or the .dmg's contents.
+  // 5. No home path, no probe and no fixed "today", in any file of the app or the .dmg's contents.
   const files = [];
   const walk = (p) => { const st = fs.lstatSync(p); if (st.isDirectory()) for (const e of fs.readdirSync(p)) walk(path.join(p, e)); else if (st.isFile()) files.push(p); };
   walk(mount);
@@ -108,6 +108,9 @@ try {
   check(`nothing in the app or the .dmg holds "${homes}"`, home.length === 0, home.join(', '));
   const probe = [...holding('MC_PROBE'), ...holding('/__probe/')];
   check('nothing in the app or the .dmg holds the probe', probe.length === 0, probe.join(', '));
+  // 0.4.2: "today" can be fixed only by the test server; the app always counts from the real date.
+  const fixedToday = holding('MC_TODAY');
+  check('nothing in the app or the .dmg holds MC_TODAY, the test server\'s fixed "today"', fixedToday.length === 0, fixedToday.join(', '));
 
   // 6. Bundle id and minimum macOS, as decided in app/tauri.conf.json.
   const plist = path.join(app, 'Contents', 'Info.plist');
@@ -117,8 +120,8 @@ try {
   const minOs = read('LSMinimumSystemVersion');
   check(`the minimum macOS version is ${CONF.bundle.macOS.minimumSystemVersion}`, minOs === CONF.bundle.macOS.minimumSystemVersion, minOs);
   const version = read('CFBundleShortVersionString');
-  check(`Info.plist's version is 0.4.1 (CFBundleShortVersionString), as in tauri.conf.json and package.json`,
-    version === '0.4.1' && CONF.version === '0.4.1' && PKG.version === '0.4.1', `${version}; tauri.conf.json ${CONF.version}; package.json ${PKG.version}`);
+  check(`Info.plist's version is 0.4.2 (CFBundleShortVersionString), as in tauri.conf.json and package.json`,
+    version === '0.4.2' && CONF.version === '0.4.2' && PKG.version === '0.4.2', `${version}; tauri.conf.json ${CONF.version}; package.json ${PKG.version}`);
 
   // 7. The sample inside: the three book-notes files are placeholders, there is no board.json or notes file, and its
   //    ledger is the repository's (0.3.0).
@@ -253,7 +256,7 @@ try {
   // 15. The command line (0.4.1) on the release app: --help and --version print and exit 0, --bogus prints the help on
   //     stderr and exits 2. Each ends by itself with no window and no Gatekeeper prompt, and writes nothing in an
   //     empty home folder.
-  const VERSION_LINE = `${CONF.productName} 0.4.1\n`;
+  const VERSION_LINE = `${CONF.productName} 0.4.2\n`;
   const cliHome = path.join(REPO, 'target', 'dist', 'check-cli-home');
   const cli = async (args) => {
     fs.rmSync(cliHome, { recursive: true, force: true });

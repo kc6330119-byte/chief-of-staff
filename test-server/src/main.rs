@@ -1,8 +1,10 @@
 // Loopback HTTP wrapper around the core, used only by the test suite (test/helpers/site.js). It is never
 // part of the app. It moves requests between a socket on 127.0.0.1 and Core::handle and decides nothing.
 //
-// MC_ROOT  the data folder (required)
-// PORT     the port on 127.0.0.1 (default 3000)
+// MC_ROOT   the data folder (required)
+// PORT      the port on 127.0.0.1 (default 3000)
+// MC_TODAY  "today" as YYYY-MM-DD, so no answer depends on the real date (the tests always set it). Only this server
+//           reads it; the app never does.
 use std::io::Read;
 use std::path::PathBuf;
 
@@ -16,10 +18,18 @@ fn main() {
     let root = std::env::current_dir().map(|d| d.join(&root)).unwrap_or_else(|_| PathBuf::from(&root));
     let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(3000);
     if !root.exists() { eprintln!("Data root not found: {}", root.display()); }
+    let mut ws = Workspace::new(&root);
+    if let Ok(today) = std::env::var("MC_TODAY") {
+        if !chief_of_staff_core::js::is_real_date(&today) {
+            eprintln!("MC_TODAY must be a real date written YYYY-MM-DD, not {today:?}.");
+            std::process::exit(2);
+        }
+        ws = ws.with_today(today);
+    }
 
     // The Help page's text, the repository's own help.md, which the app ships as a resource.
     let help = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../help.md")).ok();
-    let core = Core::new(Workspace::new(&root), Policy::loopback(port), |line| eprintln!("{line}")).with_help(help);
+    let core = Core::new(ws, Policy::loopback(port), |line| eprintln!("{line}")).with_help(help);
     let server = tiny_http::Server::http(("127.0.0.1", port)).unwrap_or_else(|e| {
         eprintln!("Could not listen on 127.0.0.1:{port}: {e}");
         std::process::exit(1);

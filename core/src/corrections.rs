@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 
 use serde_json::{json, Map, Value};
 
-use crate::meetings::{today_iso, COULD_NOT_READ};
+use crate::meetings::COULD_NOT_READ;
 use crate::paths::Workspace;
 use crate::store::write_json_atomic;
 use crate::{js, Error, Warning};
@@ -110,7 +110,7 @@ pub fn add_correction(ws: &Workspace, input: &Map<String, Value>) -> Result<Valu
     // Existing entries may have a partial date such as "2026-09" (shown as written); a new entry needs a full one.
     let date = entry["date"].as_str().unwrap().to_string();
     if !(date.len() == 10 && js::is_real_date(&date)) { return Err(err(400, "Date must be a real date, written YYYY-MM-DD")); }
-    if date.as_str() > today_iso().as_str() { return Err(err(400, "Date can’t be in the future")); }
+    if date > ws.today() { return Err(err(400, "Date can’t be in the future")); }
     let list = entries(&data).unwrap();
     let dup = list.iter().any(|e| ["date", "where", "what"].iter().all(|k| e.get(*k).is_some() && e.get(*k) == entry.get(*k)));
     if dup { return Err(err(400, "That entry is already in the log")); }
