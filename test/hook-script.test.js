@@ -4,7 +4,8 @@
 // open its window), and otherwise hands the payload to the app's --hook and returns its exit code. 0.4.1: it uses the
 // first app, in /Applications then ~/Applications, that is 0.4.0 or later, and with none it tells Claude so through
 // PostToolUse's additionalContext, with exit 0. These tests run it with sh and stand-in apps in a temporary folder: the
-// script with /Applications moved there, and HOME set to it.
+// script with /Applications moved there, and HOME set to it. 0.4.3: the app says on stdout when a summary passed, and
+// the script passes the app's stdout through as it is.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -88,12 +89,12 @@ function place() {
 // A stand-in app in `apps` (a folder standing for /Applications or ~/Applications): its Info.plist gives `version`
 // (none when undefined, no Info.plist at all when null). When started it adds a line to `log`, says how it was run on
 // stderr and exits with `code`.
-function fakeApp(apps, version, { log, code = 2 } = {}) {
+function fakeApp(apps, version, { log, code = 2, says } = {}) {
   const contents = path.join(apps, APP, 'Contents');
   fs.mkdirSync(path.join(contents, 'MacOS'), { recursive: true });
   if (version !== null) fs.writeFileSync(path.join(contents, 'Info.plist'), plist(version));
   const exe = path.join(contents, 'MacOS', 'chief-of-staff');
-  fs.writeFileSync(exe, `#!/bin/sh\nin=$(cat)\nprintf '%s\\n' "${version} $*" >> "${log}"\nprintf '%s\\n' "${version} $*: $in" >&2\nexit ${code}\n`, { mode: 0o755 });
+  fs.writeFileSync(exe, `#!/bin/sh\nin=$(cat)\nprintf '%s\\n' "${version} $*" >> "${log}"\nprintf '%s\\n' "${version} $*: $in" >&2\n${says === undefined ? '' : `cat <<'SAYS'\n${says}\nSAYS\n`}exit ${code}\n`, { mode: 0o755 });
   return exe;
 }
 
@@ -191,6 +192,19 @@ describe('check-summary.sh', () => {
     }
   });
 
+  test('what the app prints on stdout comes through as it is, with its exit code and its stderr (0.4.3)', () => {
+    const lines = [toClaude(`Chief of Staff for Managers checked ${SUMMARY}: nothing could not be read.`).trimEnd(),
+      '{"a":"a \\"quote\\", a back\\\\slash, $HOME `x` %s \\n"}', 'two\nlines  with   spaces'];
+    for (const says of lines) {
+      for (const code of [0, 2]) {
+        const p = place();
+        fakeApp(p.system, '0.4.3', { log: p.log, code, says });
+        const input = summaryPayload();
+        assert.deepEqual(hook(p, input), { code, stdout: `${says}\n`, stderr: `0.4.3 --hook: ${input}\n` }, says);
+      }
+    }
+  });
+
   test('later versions are started too', () => {
     for (const version of ['0.4', '0.4.1', '0.10.0', '1', '1.0.0', '2.3']) {
       const p = place();
@@ -256,7 +270,10 @@ describe('check-summary.sh', () => {
       stdout: '',
       stderr: `Chief of Staff for Managers could not read 1 thing in ${SUMMARY}:\n${SUMMARY}: ID "A-2609-1" is not in the form A-YYMMDD-n\nFix these in the summary and save it again.\n`,
     });
-    assert.deepEqual(hook(p, payload('Edit', path.join(SAMPLE, 'meeting-notes', SUMMARY), SAMPLE)), { code: 0, stdout: '', stderr: '' });
+    // 0.4.3: a summary with nothing wrong comes back through the script as the app's line for Claude, exit 0.
+    const passed = hook(p, payload('Edit', path.join(SAMPLE, 'meeting-notes', SUMMARY), SAMPLE));
+    assert.deepEqual(passed, { code: 0, stdout: toClaude(`Chief of Staff for Managers checked ${SUMMARY}: nothing could not be read.`), stderr: '' });
+    assert.deepEqual(JSON.parse(passed.stdout), { hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: `Chief of Staff for Managers checked ${SUMMARY}: nothing could not be read.` } });
     assert.deepEqual(snapshot(ws), before);
   });
 

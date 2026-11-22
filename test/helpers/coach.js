@@ -7,7 +7,8 @@ import path from 'node:path';
 export const SKILL = '.claude/skills/review-transcript/SKILL.md';
 
 // What step 2 added to the moved text, and what it added to CLAUDE.md.
-export const LAST_STEP = '9. The app checks the summary when you save it. If it reports anything, fix it and save again.\n';
+// 0.4.3: the step also says the app tells Claude the result, and that Claude's reply says what the check found.
+export const LAST_STEP = '9. The app checks the summary when you save it and tells you the result. If it reports anything, fix it and save again. In your reply, say what the check found.\n';
 export const PLACEHOLDER_RULE = `- If a table has no rows, leave it with its header rows only. Never add a placeholder
   row such as "None": every row in Action Items is read as an item.
 `;
@@ -19,6 +20,11 @@ export const STANDING_RULES = `## Standing rules
 4. You report; you never close an item.
 5. To review a transcript, use the review-transcript skill in .claude/skills/review-transcript/.
 
+`;
+
+// 0.4.3, in the sample only: its sixth Standing rule, after the five both workspaces have.
+export const SAMPLE_DATE_RULE = `6. This is the sample, so "today" is the date of the newest summary in meeting-notes/, as in the app. Count
+   ages and periods to that date, never the real date.
 `;
 
 // Step 3 of the starter's "Setting up this workspace", before 0.4.0 step 3 added the skill to it, and as it is now
@@ -48,12 +54,13 @@ export function skillSections(dir) {
   return skill.slice(skill.search(/^## /m));
 }
 
-// Step 1's CLAUDE.md: without the Standing rules and the skills folder in Sources, reviewed on 2026-10-14, and with
+// Step 1's CLAUDE.md: without the Standing rules (and the sample's sixth) and the skills folder in Sources, reviewed on 2026-10-14, and with
 // the skill's sections, less the two lines step 2 added, back before "Notes between meetings"; and in the starter,
 // setup step 3 as it was before step 3 of 0.4.0.
 export function claudeAsInStep1(dir) {
   const moved = skillSections(dir).replace(LAST_STEP, '').replace(PLACEHOLDER_RULE, '');
   return read(dir, 'CLAUDE.md')
+    .replace(SAMPLE_DATE_RULE, '')
     .replace(STANDING_RULES, '')
     .replace('templates/, .claude/skills/, library/', 'templates/, library/')
     .replace(/^Last reviewed: 2026-10-18$/m, 'Last reviewed: 2026-10-14')

@@ -4,8 +4,10 @@
 // and no network connection, and writes nothing anywhere.
 //
 // Exit codes, as Claude Code reads them: 2 when the summary has things that could not be read, with the message for
-// Claude on stderr; 0 otherwise. A payload it can't read, or a summary it can't open, is 0 with one line on stderr:
-// the hook never blocks Claude's work.
+// Claude on stderr; 0 otherwise. When it checked a summary and nothing could not be read (0.4.3), it says so to Claude:
+// PostToolUse JSON on stdout, whose additionalContext Claude Code gives Claude next to the tool's result. A file that
+// is not a summary is 0 with nothing said. A payload it can't read, or a summary it can't open, is 0 with one line on
+// stderr: the hook never blocks Claude's work.
 use std::ffi::OsString;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -51,7 +53,7 @@ pub fn run(args: &[OsString], input: &str) -> Outcome {
     let name = path.file_name().unwrap().to_string_lossy().into_owned();
     match check::could_not_read(workspace, Some(&File::Path(path.clone()))) {
         Err(line) => passed(line),
-        Ok(warnings) if warnings.is_empty() => Outcome { code: 0, stdout: String::new(), stderr: String::new() },
+        Ok(warnings) if warnings.is_empty() => Outcome { code: 0, stdout: checked(&name), stderr: String::new() },
         Ok(warnings) => {
             let n = warnings.len();
             let mut stderr = format!("{} could not read {n} thing{} in {name}:\n", *chief_of_staff_core::APP_NAME, if n == 1 { "" } else { "s" });
@@ -68,6 +70,13 @@ fn summary_workspace(path: &Path) -> Option<&Path> {
     let meetings = path.parent()?;
     if meetings.file_name()? != MEETINGS_DIR { return None; }
     meetings.parent()
+}
+
+/// The line for Claude when the summary was checked and nothing could not be read, as the PostToolUse JSON Claude Code
+/// reads from a hook that exits 0. Written in the same form as the workspace's check-summary.sh writes its own lines.
+fn checked(name: &str) -> String {
+    let line = format!("{} checked {name}: nothing could not be read.", *chief_of_staff_core::APP_NAME);
+    format!("{{\"hookSpecificOutput\":{{\"hookEventName\":\"PostToolUse\",\"additionalContext\":{}}}}}\n", Value::String(line))
 }
 
 /// Exit 0, so Claude's work goes on, with one line on stderr saying why nothing was checked.
@@ -141,14 +150,34 @@ mod tests {
 
     const BAD_ID: &str = "| A-2610-1 |";
 
+    const PASSED: &str = "{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Chief of Staff for Managers checked 2026-09-15_kevin-sam_1on1.md: nothing could not be read.\"}}\n";
+
     #[test]
-    fn a_clean_summary_is_silent_for_write_and_edit() {
+    fn a_clean_summary_tells_claude_it_passed_for_write_and_edit() {
         let ws = repo("sample-workspace");
         let file = ws.join("meeting-notes/2026-09-15_kevin-sam_1on1.md");
         for tool in ["Write", "Edit"] {
             let out = hook(&payload(tool, &file, &ws));
-            assert_eq!((out.code, out.stdout.as_str(), out.stderr.as_str()), (0, "", ""), "{tool}");
+            assert_eq!((out.code, out.stdout.as_str(), out.stderr.as_str()), (0, PASSED, ""), "{tool}");
+            let said: Value = serde_json::from_str(&out.stdout).unwrap();
+            assert_eq!(said, json!({ "hookSpecificOutput": { "hookEventName": "PostToolUse",
+                "additionalContext": "Chief of Staff for Managers checked 2026-09-15_kevin-sam_1on1.md: nothing could not be read." } }));
         }
+    }
+
+    #[test]
+    fn a_file_name_with_a_quote_or_a_backslash_is_escaped_in_the_json() {
+        let dir = scratch("escaped");
+        copy(&repo("sample-workspace"), &dir);
+        let name = "2026-09-15_a \"b\" c\\d.md";
+        fs::rename(dir.join("meeting-notes/2026-09-15_kevin-sam_1on1.md"), dir.join("meeting-notes").join(name)).unwrap();
+        let out = hook(&payload("Write", &dir.join("meeting-notes").join(name), &dir));
+        assert_eq!((out.code, out.stderr.as_str()), (0, ""));
+        assert_eq!(out.stdout.lines().count(), 1);
+        let said: Value = serde_json::from_str(&out.stdout).unwrap();
+        assert_eq!(said.pointer("/hookSpecificOutput/additionalContext").and_then(Value::as_str),
+            Some(format!("Chief of Staff for Managers checked {name}: nothing could not be read.").as_str()));
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

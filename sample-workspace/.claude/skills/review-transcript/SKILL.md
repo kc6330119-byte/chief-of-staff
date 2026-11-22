@@ -5,7 +5,7 @@ description: Review a meeting transcript and save its summary in meeting-notes/.
 
 Purpose: review one meeting transcript, save its summary in meeting-notes/, and coach Kevin on the meeting.
 Sources: transcripts/, goals/, meeting-notes/, templates/meeting-summary-template.md, library/carnegie-notes.md, library/getting-more-notes.md, people.md, notes/notes.json
-Last reviewed: 2026-10-22
+Last reviewed: 2026-11-21
 
 The summary format is templates/meeting-summary-template.md. example.md, next to this file, is one complete
 summary to copy the shape of.
@@ -22,7 +22,7 @@ If Kevin doesn't name a transcript, list the files in transcripts/ that have no 
 6. Mark anything that wasn't said in the meeting as "(suggested)". Don't invent facts.
 7. Keep observations about someone's wellbeing brief and factual in a single "Manager-only note". Never record health details.
 8. Save the full summary to `meeting-notes/`, named as described under Dates, then show a condensed version in the chat.
-9. The app checks the summary when you save it. If it reports anything, fix it and save again.
+9. The app checks the summary when you save it and tells you the result. If it reports anything, fix it and save again. In your reply, say what the check found.
 
 ## Dates
 - The meeting date is the one in the transcript's own header, not its file name.

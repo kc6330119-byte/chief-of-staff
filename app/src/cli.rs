@@ -73,7 +73,7 @@ mod tests {
             assert_eq!(out.stdout, help(), "{list:?}");
         }
         let text = help();
-        assert!(text.starts_with("Chief of Staff for Managers 0.4.2\n\n"), "{text}");
+        assert!(text.starts_with("Chief of Staff for Managers 0.4.3\n\n"), "{text}");
         for option in ["--check", "--file", "--json", "--hook", "--help, -h", "--version"] {
             assert!(text.contains(&format!("\n  {option} ")) || text.contains(&format!("\n  {option}\n")), "{option}");
         }
@@ -83,9 +83,9 @@ mod tests {
     fn version_prints_the_name_and_version_and_exits_0() {
         for list in [&["--version"][..], &["-psn_0_123", "--version"], &["--check", "/ws", "--version"]] {
             let out = decide_on(list).expect("no window");
-            assert_eq!((out.code, out.stdout.as_str(), out.stderr.as_str()), (0, "Chief of Staff for Managers 0.4.2\n", ""), "{list:?}");
+            assert_eq!((out.code, out.stdout.as_str(), out.stderr.as_str()), (0, "Chief of Staff for Managers 0.4.3\n", ""), "{list:?}");
         }
-        assert_eq!(env!("CARGO_PKG_VERSION"), "0.4.2");
+        assert_eq!(env!("CARGO_PKG_VERSION"), "0.4.3");
     }
 
     #[test]

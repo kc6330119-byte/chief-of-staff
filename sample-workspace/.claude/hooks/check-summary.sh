@@ -2,9 +2,10 @@
 # each Edit or Write, with Claude Code's JSON about the save on stdin. It only reads: it writes, changes and deletes
 # nothing. A save outside meeting-notes/ is passed over without starting the app. The app used is the first copy, in
 # /Applications then ~/Applications, that is 0.4.0 or later; an older one, which has no --hook, is never started. The
-# app checks the summary, and its exit code is this script's: 2, with what it could not read on stderr for Claude to
-# fix, or 0. With no app to check it, the script tells Claude so without blocking: exit 0, and on stdout the JSON that
-# gives Claude Code a line for Claude.
+# app checks the summary, and its exit code and what it prints are this script's: 2, with what it could not read on
+# stderr for Claude to fix, or 0, with a line for Claude on stdout when nothing could not be read (0.4.3 or later).
+# With no app to check it, the script tells Claude so without blocking: exit 0, and on stdout the JSON that gives
+# Claude Code a line for Claude.
 
 payload=$(cat)
 case $payload in

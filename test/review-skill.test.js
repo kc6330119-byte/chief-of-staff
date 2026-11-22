@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
-import { claudeAsInStep1, LAST_STEP, PLACEHOLDER_RULE, SHA_STEP1, SKILL, STANDING_RULES } from './helpers/coach.js';
+import { claudeAsInStep1, LAST_STEP, PLACEHOLDER_RULE, SAMPLE_DATE_RULE, SHA_STEP1, SKILL, STANDING_RULES } from './helpers/coach.js';
 import { openPage } from './helpers/page.js';
 import { SITE_DIR, snapshot, startSite } from './helpers/site.js';
 
@@ -64,6 +64,8 @@ function withBadId() {
   fs.writeFileSync(file, text.replace('\n| A-260915-1 |', '\n| A-2609-1 |'));
   return { dir, file };
 }
+// What the hook prints when it checked a summary and nothing could not be read (0.4.3).
+const PASSED = `${JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: `Chief of Staff for Managers checked ${SUMMARY}: nothing could not be read.` } })}\n`;
 const BAD_ID_MESSAGE = `Chief of Staff for Managers could not read 1 thing in ${SUMMARY}:
 ${SUMMARY}: ID "A-2609-1" is not in the form A-YYMMDD-n
 Fix these in the summary and save it again.
@@ -84,12 +86,19 @@ describe('--hook', () => {
     for (const p of PAYLOADS) assert.deepEqual(hook(JSON.stringify(p)), { code: 0, stdout: '', stderr: '' }, p.tool_name);
   });
 
-  test('a summary with nothing wrong, after a Write or an Edit: exit 0, nothing said', () => {
+  // 0.4.3: a pass is said to Claude, as PostToolUse JSON on stdout. Before, a pass said nothing.
+  test('a summary with nothing wrong, after a Write or an Edit: exit 0, and PostToolUse JSON on stdout that tells Claude it passed', () => {
     for (const tool of ['Write', 'Edit']) {
-      assert.deepEqual(hook(payload(tool, path.join(SAMPLE, 'meeting-notes', SUMMARY), SAMPLE)), { code: 0, stdout: '', stderr: '' }, tool);
+      assert.deepEqual(hook(payload(tool, path.join(SAMPLE, 'meeting-notes', SUMMARY), SAMPLE)), { code: 0, stdout: PASSED, stderr: '' }, tool);
       // From a session started elsewhere: the workspace is the folder that holds meeting-notes/, not cwd.
-      assert.deepEqual(hook(payload(tool, path.join(SAMPLE, 'meeting-notes', SUMMARY), os.tmpdir())), { code: 0, stdout: '', stderr: '' }, tool);
+      assert.deepEqual(hook(payload(tool, path.join(SAMPLE, 'meeting-notes', SUMMARY), os.tmpdir())), { code: 0, stdout: PASSED, stderr: '' }, tool);
     }
+    assert.equal(PASSED, '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"Chief of Staff for Managers checked 2026-09-15_kevin-sam_1on1.md: nothing could not be read."}}\n');
+  });
+
+  test('--check is as it was: the same summary prints "Nothing could not be read" and exits 0', () => {
+    assert.deepEqual(run(APP_BIN, ['--check', SAMPLE, '--file', `meeting-notes/${SUMMARY}`], ''), { code: 0, stdout: 'Nothing could not be read\n', stderr: '' });
+    assert.deepEqual(run(APP_BIN, ['--check', SAMPLE], ''), { code: 0, stdout: 'Nothing could not be read\n', stderr: '' });
   });
 
   test('other files in the workspace, and a .md not directly in meeting-notes/: exit 0, nothing said', () => {
@@ -175,8 +184,8 @@ describe('the review-transcript skill in both workspaces', () => {
 
     test(`${name}: Purpose, Sources and Last reviewed lines, and the template and example it points to`, () => {
       for (const label of ['Purpose', 'Sources', 'Last reviewed']) assert.match(skill, new RegExp(`^${label}: \\S`, 'm'), label);
-      // 0.4.1 moved it from 2026-10-18 with the lines below.
-      assert.match(skill, /^Last reviewed: 2026-10-22$/m);
+      // 0.4.1 moved it from 2026-10-18 with the lines below; 0.4.3 from 2026-10-22 with step 9.
+      assert.match(skill, /^Last reviewed: 2026-11-21$/m);
       assert.ok(skill.includes('The summary format is templates/meeting-summary-template.md. example.md, next to this file, is one complete\nsummary to copy the shape of.'));
       // 0.4.1: with no transcript named (as "Run in Claude Code" on the Agents page starts it), it lists the ones not yet
       // reviewed and asks. Before the steps, so they and the sections moved from CLAUDE.md are as they were.
@@ -213,7 +222,11 @@ describe('the review-transcript skill in both workspaces', () => {
       const setup = name === 'starter' ? ['Setting up this workspace'] : [];
       const own = name === 'starter' ? 'their' : 'his';
       assert.deepEqual(heads, ['Standing rules', 'Folder', ...setup, 'Notes between meetings', `When ${manager} asks for one of ${own} agents`, `When ${manager} asks for the weekly brief`]);
-      assert.ok(claude.includes(`\nLast reviewed: 2026-10-18\n\n${STANDING_RULES}## Folder\n`));
+      // 0.4.3: the sample has a sixth rule, that "today" is its newest summary's date; the starter does not.
+      const rules = name === 'sample' ? STANDING_RULES.replace(/\n\n$/, `\n${SAMPLE_DATE_RULE}\n`) : STANDING_RULES;
+      assert.ok(claude.includes(`\nLast reviewed: 2026-10-18\n\n${rules}## Folder\n`));
+      assert.equal(claude.includes(SAMPLE_DATE_RULE), name === 'sample');
+      assert.equal(/newest summary|real date/.test(claude), name === 'sample');
       assert.match(claude, /^Sources: transcripts\/, goals\/, meeting-notes\/, templates\/, \.claude\/skills\/, library\//m);
       for (const gone of ['Never change or reuse an ID', 'Name the saved summary', 'Flip Cards']) assert.equal(claude.includes(gone), false, gone);
     });
@@ -250,9 +263,9 @@ describe('the skill on the Agents page', () => {
     assert.equal(card.command, '/review-transcript');
     assert.equal(card.purposeHtml, 'review one meeting transcript, save its summary in meeting-notes/, and coach Kevin on the meeting.');
     assert.match(card.sourcesHtml, /^transcripts\/, goals\//);
-    assert.equal(card.lastReviewed, '2026-10-22');
+    assert.equal(card.lastReviewed, '2026-11-21');
     assert.equal(card.rulesHtml.length, 9);
-    assert.equal(card.rulesHtml.at(-1), 'The app checks the summary when you save it. If it reports anything, fix it and save again.');
+    assert.equal(card.rulesHtml.at(-1), LAST_STEP.slice(3, -1));
     assert.deepEqual(card.warnings, []);
   });
 

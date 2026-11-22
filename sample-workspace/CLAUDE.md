@@ -13,6 +13,8 @@ Last reviewed: 2026-10-18
    "Manager-only note".
 4. You report; you never close an item.
 5. To review a transcript, use the review-transcript skill in .claude/skills/review-transcript/.
+6. This is the sample, so "today" is the date of the newest summary in meeting-notes/, as in the app. Count
+   ages and periods to that date, never the real date.
 
 ## Folder
 - `transcripts/`: raw meeting transcripts.

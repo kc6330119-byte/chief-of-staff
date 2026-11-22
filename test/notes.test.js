@@ -722,13 +722,14 @@ describe('the sample', () => {
   });
 
   // 0.4.0 step 2: the coach's rules are its five Standing rules; the review steps are the review-transcript skill's.
+  // 0.4.3: the sample has a sixth, that "today" is the date of its newest summary.
   test('the Agents page reads the coach\'s Standing rules and the skill\'s review steps, nothing it could not read', async () => {
     const site = await startSite();
     try {
       const { cards } = await site.api.agents();
       const coach = cards.find((c) => c.role === 'coach');
       assert.equal(coach.rulesCaption, 'Standing rules');
-      assert.equal(coach.rulesHtml.length, 5);
+      assert.equal(coach.rulesHtml.length, 6);
       const skill = cards.find((c) => c.role === 'skill');
       assert.equal(skill.rulesCaption, 'When Kevin asks you to review a transcript');
       assert.equal(skill.rulesHtml.length, 9);

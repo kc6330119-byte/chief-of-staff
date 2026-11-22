@@ -40,7 +40,7 @@ fn run(args: &[&str]) -> Ran {
 fn help_prints_the_options_and_exits_0() {
     let first = run(&["--help"]);
     assert_eq!((first.code, first.stderr.as_str()), (0, ""));
-    assert!(first.stdout.starts_with("Chief of Staff for Managers 0.4.2\n"), "{}", first.stdout);
+    assert!(first.stdout.starts_with("Chief of Staff for Managers 0.4.3\n"), "{}", first.stdout);
     for option in ["--check", "--file", "--json", "--hook", "--help, -h", "--version"] {
         assert!(first.stdout.contains(&format!("\n  {option}")), "{option}");
     }
@@ -52,7 +52,7 @@ fn help_prints_the_options_and_exits_0() {
 fn version_prints_the_name_and_version_and_exits_0() {
     for args in [&["--version"][..], &["-psn_0_4242", "--version"]] {
         let out = run(args);
-        assert_eq!((out.code, out.stdout.as_str(), out.stderr.as_str()), (0, "Chief of Staff for Managers 0.4.2\n", ""), "{args:?}");
+        assert_eq!((out.code, out.stdout.as_str(), out.stderr.as_str()), (0, "Chief of Staff for Managers 0.4.3\n", ""), "{args:?}");
     }
 }
 

@@ -75,9 +75,9 @@ test('a workspace of your own counts review age to today, as before: a later dat
       assert.equal((await site.get('/api/today')).json.foot.agentsReviewDue, due, today);
     });
   }
-  // The skill was reviewed on 2026-10-22: two days ahead of 2026-10-20, and long due by 2027-06-01.
+  // The skill was reviewed on 2026-11-21: 32 days ahead of 2026-10-20, and long due by 2027-06-01.
   const skill = (view) => view.cards.find((c) => c.role === 'skill');
-  assert.equal(skill(await at('2026-10-20', false, async (s) => (await s.get('/api/agents')).json)).daysSince, -2);
+  assert.equal(skill(await at('2026-10-20', false, async (s) => (await s.get('/api/agents')).json)).daysSince, -32);
   assert.equal(skill(await at('2027-06-01', false, async (s) => (await s.get('/api/agents')).json)).reviewDue, true);
 });
 

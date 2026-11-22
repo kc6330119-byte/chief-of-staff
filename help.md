@@ -168,6 +168,7 @@ with `/review-transcript`. It lists the transcripts that have no summary yet and
 
 As Claude Code saves the summary, the app checks it, as Meetings would. If it could not read something,
 such as an ID not in the form A-YYMMDD-n, it tells Claude, and Claude fixes the summary and saves it again.
+In its reply, Claude says what the check found.
 The check needs the app at 0.4.0 or later, in Applications. An older app is never started, and the summary
 is saved unchecked. See "What does the workspace's hook do?" below.
 

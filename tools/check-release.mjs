@@ -120,8 +120,8 @@ try {
   const minOs = read('LSMinimumSystemVersion');
   check(`the minimum macOS version is ${CONF.bundle.macOS.minimumSystemVersion}`, minOs === CONF.bundle.macOS.minimumSystemVersion, minOs);
   const version = read('CFBundleShortVersionString');
-  check(`Info.plist's version is 0.4.2 (CFBundleShortVersionString), as in tauri.conf.json and package.json`,
-    version === '0.4.2' && CONF.version === '0.4.2' && PKG.version === '0.4.2', `${version}; tauri.conf.json ${CONF.version}; package.json ${PKG.version}`);
+  check(`Info.plist's version is 0.4.3 (CFBundleShortVersionString), as in tauri.conf.json and package.json`,
+    version === '0.4.3' && CONF.version === '0.4.3' && PKG.version === '0.4.3', `${version}; tauri.conf.json ${CONF.version}; package.json ${PKG.version}`);
 
   // 7. The sample inside: the three book-notes files are placeholders, there is no board.json or notes file, and its
   //    ledger is the repository's (0.3.0).
@@ -256,7 +256,7 @@ try {
   // 15. The command line (0.4.1) on the release app: --help and --version print and exit 0, --bogus prints the help on
   //     stderr and exits 2. Each ends by itself with no window and no Gatekeeper prompt, and writes nothing in an
   //     empty home folder.
-  const VERSION_LINE = `${CONF.productName} 0.4.2\n`;
+  const VERSION_LINE = `${CONF.productName} 0.4.3\n`;
   const cliHome = path.join(REPO, 'target', 'dist', 'check-cli-home');
   const cli = async (args) => {
     fs.rmSync(cliHome, { recursive: true, force: true });
@@ -302,6 +302,22 @@ try {
         return [loop && json && told, [loop ? '' : 'no loop over both folders', json ? '' : 'no PostToolUse JSON', told ? '' : `with no app: exit ${r.status}, stdout ${JSON.stringify(r.stdout)}, stderr ${JSON.stringify(r.stderr)}`].filter(Boolean).join('; ')];
       });
     }
+    // 17. A pass is said to Claude (0.4.3): the release app, started by the sample's check-summary.sh on a summary in
+    //     its bundled sample, exits 0 and prints PostToolUse JSON whose additionalContext says the summary was checked.
+    check('the release app, started by the sample\'s check-summary.sh on a summary in its bundled sample, exits 0 and tells Claude it passed: PostToolUse JSON on stdout, nothing on stderr, nothing written', () => {
+      const SUMMARY = '2026-09-15_kevin-sam_1on1.md';
+      const text = fs.readFileSync(path.join(sample, '.claude', 'hooks', 'check-summary.sh'), 'utf8');
+      fs.rmSync(hookDir, { recursive: true, force: true });
+      for (const d of ['system', 'home']) fs.mkdirSync(path.join(hookDir, d), { recursive: true });
+      fs.symlinkSync(app, path.join(hookDir, 'system', `${CONF.productName}.app`));
+      const copy = path.join(hookDir, 'check-summary.sh');
+      fs.writeFileSync(copy, text.replace('"/Applications/Chief of Staff for Managers.app"', JSON.stringify(path.join(hookDir, 'system', `${CONF.productName}.app`))));
+      const payload = JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: 'Write', cwd: sample, tool_input: { file_path: path.join(sample, 'meeting-notes', SUMMARY) } });
+      const r = spawnSync('/bin/sh', [copy], { input: payload, env: { PATH: '/usr/bin:/bin', HOME: path.join(hookDir, 'home') }, encoding: 'utf8', timeout: 20000 });
+      const want = `${JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: `${CONF.productName} checked ${SUMMARY}: nothing could not be read.` } })}\n`;
+      const wrote = fs.readdirSync(path.join(hookDir, 'home')).length > 0;
+      return [r.status === 0 && r.stdout === want && r.stderr === '' && !wrote, `exit ${r.status}, stdout ${JSON.stringify(r.stdout)}, stderr ${JSON.stringify((r.stderr || '').slice(0, 200))}${wrote ? ', wrote to its home folder' : ''}`];
+    });
   } finally {
     fs.rmSync(hookDir, { recursive: true, force: true });
   }
